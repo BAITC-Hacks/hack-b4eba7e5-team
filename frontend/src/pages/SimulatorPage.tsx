@@ -23,6 +23,13 @@ const panel = 'flex h-[75dvh] min-h-[560px] min-w-0 flex-col overflow-hidden bor
 const panelScroll = 'relative min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600'
 const panelLink = `min-h-9 px-2 text-[11px] font-medium text-teal-800 hover:bg-teal-50 ${focus}`
 
+function showPanelSection(id: string) {
+  const target = document.getElementById(id)
+  if (!target) return
+  target.focus({ preventScroll: true })
+  scrollPanelTo(target, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth')
+}
+
 function ErrorMessage({ error }: { error: ApiError }) {
   return (
     <div role="alert" className="rounded-none border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -38,7 +45,7 @@ export default function SimulatorPage() {
   const [reload, setReload] = useState(0)
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [districtId, setDistrictId] = useState('nura')
-  const [openDirection, setOpenDirection] = useState('social')
+  const [openDirection, setOpenDirection] = useState('')
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [calculating, setCalculating] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
@@ -49,12 +56,10 @@ export default function SimulatorPage() {
   const revision = useRef(0)
   const calculationRequest = useRef(0)
   const analysisAbort = useRef<AbortController | null>(null)
-  function showPanelSection(id: string) {
-    const target = document.getElementById(id)
-    if (!target) return
-    target.focus({ preventScroll: true })
-    scrollPanelTo(target, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth')
-  }
+
+  useEffect(() => {
+    if (evaluation?.valid && evaluation.result) showPanelSection('city-score')
+  }, [evaluation])
 
   useEffect(() => {
     let current = true
