@@ -1,1 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="148" viewBox="0 0 1120 148" role="img" aria-labelledby="title"><title id="title">5 решений из 14; бюджет 100; 5 районов; горизонт 8 кварталов</title><rect width="1120" height="148" rx="18" fill="#f5f4ee"/><g font-family="Arial, Helvetica, sans-serif"><text x="36" y="77" font-size="43" letter-spacing="-1.8" fill="#23372c">5 из 14</text><text x="36" y="110" font-size="12" fill="#66715f">управленческих решений</text><path d="M296 33v80" stroke="#d9ddd2"/><text x="316" y="77" font-size="43" letter-spacing="-1.8" fill="#23372c">100</text><text x="316" y="110" font-size="12" fill="#66715f">единиц общего бюджета</text><path d="M576 33v80" stroke="#d9ddd2"/><text x="596" y="77" font-size="43" letter-spacing="-1.8" fill="#23372c">5</text><text x="596" y="110" font-size="12" fill="#66715f">расчётных районов</text><path d="M856 33v80" stroke="#d9ddd2"/><text x="876" y="77" font-size="43" letter-spacing="-1.8" fill="#23372c">8</text><text x="876" y="110" font-size="12" fill="#66715f">кварталов горизонта</text></g></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="132" viewBox="0 0 1120 132" role="img" aria-labelledby="title"><title id="title">5 решений из 14; бюджет 100; 5 районов; горизонт 8 кварталов</title>
+<rect x=".5" y=".5" width="1119" height="131" fill="#ffffff" stroke="#e7e5e4"/>
+<g font-family="Arial, Helvetica, sans-serif">
+<text x="28" y="67" font-size="38" font-weight="600" letter-spacing="-1.5" fill="#1c1917">5 из 14</text><text x="28" y="99" font-size="13" fill="#78716c">управленческих решений</text>
+<path d="M280 24v84" stroke="#e7e5e4"/>
+<text x="308" y="67" font-size="38" font-weight="600" letter-spacing="-1.5" fill="#1c1917">100</text><text x="308" y="99" font-size="13" fill="#78716c">единиц общего бюджета</text>
+<path d="M560 24v84" stroke="#e7e5e4"/>
+<text x="588" y="67" font-size="38" font-weight="600" letter-spacing="-1.5" fill="#1c1917">5</text><text x="588" y="99" font-size="13" fill="#78716c">расчётных районов</text>
+<path d="M840 24v84" stroke="#e7e5e4"/>
+<text x="868" y="67" font-size="38" font-weight="600" letter-spacing="-1.5" fill="#1c1917">8</text><text x="868" y="99" font-size="13" fill="#78716c">кварталов горизонта</text>
+</g></svg>
