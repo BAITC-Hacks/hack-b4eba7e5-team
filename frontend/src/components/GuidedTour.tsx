@@ -65,9 +65,9 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(measure)
     }
-    // Прокручиваем под затемнением; карточка остаётся на месте.
+    // Плавно двигаем страницу; карточка закреплена, подсветка следует блоку без задержки.
     const top = target.getBoundingClientRect().top + window.scrollY - 24
-    window.scrollTo({ top: Math.max(0, top), behavior: 'instant' })
+    window.scrollTo({ top: Math.max(0, top), behavior: reducedMotion() ? 'instant' : 'smooth' })
     measure()
     const reveal = requestAnimationFrame(() => setStepVisible(true))
     const observer = new ResizeObserver(scheduleMeasure)
