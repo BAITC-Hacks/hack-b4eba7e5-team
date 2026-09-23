@@ -23,6 +23,7 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const navigation = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextButton = useRef<HTMLButtonElement>(null)
+  const initialScroll = useRef({ left: 0, top: 0 })
   const finish = useRef(onClose)
   const maskId = useId()
   const headingId = useId()
@@ -35,7 +36,7 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
     const modal = dialog.current
     if (!modal) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const scroll = { left: window.scrollX, top: window.scrollY }
+    initialScroll.current = { left: window.scrollX, top: window.scrollY }
     const wasLocked = document.documentElement.classList.contains('overflow-hidden')
     document.documentElement.classList.add('overflow-hidden')
     modal.showModal()
@@ -44,7 +45,6 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
       cancelAnimationFrame(frame)
       modal.close()
       if (!wasLocked) document.documentElement.classList.remove('overflow-hidden')
-      window.scrollTo({ ...scroll, behavior: 'instant' })
       opener?.focus({ preventScroll: true })
     }
   }, [])
@@ -85,8 +85,28 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!closing) return
-    const timer = setTimeout(() => finish.current(), reducedMotion() ? 0 : 180)
-    return () => clearTimeout(timer)
+    const reduce = reducedMotion()
+    const { left, top } = initialScroll.current
+    const destination = {
+      left: Math.min(left, Math.max(0, document.documentElement.scrollWidth - window.innerWidth)),
+      top: Math.min(top, Math.max(0, document.documentElement.scrollHeight - window.innerHeight)),
+    }
+    const started = performance.now()
+    let frame = 0
+    window.scrollTo({ ...destination, behavior: reduce ? 'instant' : 'smooth' })
+    // Сохраняем высоту страницы до конца возврата, чтобы удаление отступа не обрывало скролл.
+    function waitForReturn(now: number) {
+      const returned = Math.abs(window.scrollX - destination.left) <= 1
+        && Math.abs(window.scrollY - destination.top) <= 1
+      const elapsed = now - started
+      if ((returned && elapsed >= (reduce ? 0 : 180)) || elapsed >= 1500) {
+        finish.current()
+      } else {
+        frame = requestAnimationFrame(waitForReturn)
+      }
+    }
+    frame = requestAnimationFrame(waitForReturn)
+    return () => cancelAnimationFrame(frame)
   }, [closing])
 
   useEffect(() => () => {
