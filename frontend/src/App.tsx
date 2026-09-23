@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './lib/api'
-import ChatPage from './pages/ChatPage'
+import SimulatorPage from './pages/SimulatorPage'
 
 type Health = { status: string; env: string; llm: 'mock' | 'live' }
 
@@ -15,14 +15,14 @@ export default function App() {
   }, [])
 
   return (
-    <div className="flex h-full flex-col bg-slate-50 text-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <h1 className="text-lg font-semibold">HackAlem</h1>
+    <div className="min-h-full bg-slate-50 text-slate-900">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+        <h1 className="text-lg font-semibold">Аким на 5 часов</h1>
         <span className="text-xs text-slate-500">
-          {health ? `API ok · LLM: ${health.llm}` : 'API недоступен'}
+          {health ? `Рабочий прототип · ИИ: ${health.llm === 'mock' ? 'шаблонный режим' : 'API'}` : 'Проверяем связь с сервером…'}
         </span>
       </header>
-      <ChatPage />
+      <SimulatorPage />
     </div>
   )
 }
