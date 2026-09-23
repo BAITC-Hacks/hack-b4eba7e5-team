@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import AstanaMap from '../components/AstanaMap'
 import GuidedTour from '../components/GuidedTour'
 import ResizableColumns from '../components/ResizableColumns'
@@ -32,7 +33,7 @@ function ErrorMessage({ error }: { error: ApiError }) {
   )
 }
 
-export default function SimulatorPage() {
+export default function SimulatorPage({ actionsContainer }: { actionsContainer: HTMLDivElement | null }) {
   const [config, setConfig] = useState<SimConfig | null>(null)
   const [loadError, setLoadError] = useState<ApiError | null>(null)
   const [reload, setReload] = useState(0)
@@ -215,8 +216,8 @@ export default function SimulatorPage() {
   )) ?? []
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-[2200px] flex-1 flex-col px-3 pb-5 pt-2 sm:px-5 2xl:px-6">
-      <section className="mb-4 flex shrink-0 flex-wrap items-center justify-end gap-3">
+    <main className="mx-auto flex min-h-0 w-full max-w-[2200px] flex-1 flex-col px-3 pb-8 pt-2 sm:px-5 2xl:px-6">
+      {actionsContainer && createPortal(
         <div className="flex flex-wrap gap-1 text-xs">
           <button type="button" aria-label="Запустить подсказки" title="Подсказки" onClick={() => setTourOpen(true)} className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-lg font-semibold leading-none text-stone-700 hover:border-teal-700 hover:text-teal-800 ${focus} ${motion}`}>
             ?
@@ -224,8 +225,8 @@ export default function SimulatorPage() {
           <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-none border border-stone-300 px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:border-transparent disabled:opacity-40 ${focus} ${motion}`}>
             Сбросить
           </button>
-        </div>
-      </section>
+        </div>, actionsContainer,
+      )}
       <p aria-live="polite" role="status" className="sr-only">{feedback}</p>
 
       <ResizableColumns>
