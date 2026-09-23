@@ -9,6 +9,7 @@ import ScoreGauge from '../components/ScoreGauge'
 import DistrictPopup from '../components/DistrictPopup'
 import DistrictSelect from '../components/DistrictSelect'
 import MeasureDetails from '../components/MeasureDetails'
+import PlanAdvisor from '../components/PlanAdvisor'
 import {
   ApiError, analyzeScenario, evaluateScenario, getSimConfig,
   type Decision, type Evaluation, type Indicator, type Measure, type SimConfig,
@@ -23,6 +24,13 @@ const enter = 'motion-safe:transition-[opacity,transform] motion-safe:duration-3
 const panel = 'flex h-[75dvh] min-h-[560px] min-w-0 flex-col overflow-hidden border border-stone-200/80 bg-white md:h-full md:min-h-0'
 const panelScroll = 'relative min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-600'
 const panelLink = `min-h-9 px-2 text-[11px] font-medium text-teal-800 hover:bg-teal-50 ${focus}`
+
+function showPanelSection(id: string) {
+  const target = document.getElementById(id)
+  if (!target) return
+  target.focus({ preventScroll: true })
+  scrollPanelTo(target, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth')
+}
 
 function ErrorMessage({ error }: { error: ApiError }) {
   return (
@@ -39,23 +47,22 @@ export default function SimulatorPage({ actionsContainer }: { actionsContainer: 
   const [reload, setReload] = useState(0)
   const [decisions, setDecisions] = useState<Decision[]>([])
   const [districtId, setDistrictId] = useState('nura')
-  const [openDirection, setOpenDirection] = useState('social')
+  const [openDirection, setOpenDirection] = useState('')
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
   const [calculating, setCalculating] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState('')
+  const [analysisComplete, setAnalysisComplete] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
   const [feedback, setFeedback] = useState('')
   const [tourOpen, setTourOpen] = useState(false)
   const revision = useRef(0)
   const calculationRequest = useRef(0)
   const analysisAbort = useRef<AbortController | null>(null)
-  function showPanelSection(id: string) {
-    const target = document.getElementById(id)
-    if (!target) return
-    target.focus({ preventScroll: true })
-    scrollPanelTo(target, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth')
-  }
+
+  useEffect(() => {
+    if (evaluation?.valid && evaluation.result) showPanelSection('city-score')
+  }, [evaluation])
 
   useEffect(() => {
     let current = true
@@ -111,11 +118,13 @@ export default function SimulatorPage({ actionsContainer }: { actionsContainer: 
     const version = revision.current
     setAnalysis('')
     setAnalyzing(true)
+    setAnalysisComplete(false)
     setError(null)
     try {
       await analyzeScenario(decisions, (delta) => {
         if (version === revision.current && !controller.signal.aborted) setAnalysis((prev) => prev + delta)
       }, controller.signal)
+      if (!controller.signal.aborted && version === revision.current) setAnalysisComplete(true)
     } catch (err) {
       if (!controller.signal.aborted && version === revision.current) setError(toError(err))
     } finally {
@@ -417,6 +426,8 @@ export default function SimulatorPage({ actionsContainer }: { actionsContainer: 
                 </div>
               </div>
 
+              <PlanAdvisor key={`${JSON.stringify(decisions)}:${Boolean(result)}`} config={config} decisions={decisions} current={result}
+                onApply={(plan) => { changePlan(plan, 'Предложенный план применён.'); void calculate(plan) }} />
               {error && <ErrorMessage error={error} />}
               {evaluation && !evaluation.valid && (
                 <div role="alert" className={`rounded-none border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900 ${enter}`}>
@@ -479,6 +490,7 @@ export default function SimulatorPage({ actionsContainer }: { actionsContainer: 
                     </button>
                     {analyzing && <button className={`mt-1 min-h-9 rounded-none px-2 text-xs text-stone-500 underline underline-offset-4 ${focus}`} onClick={() => { analysisAbort.current?.abort(); setAnalyzing(false) }}>Остановить</button>}
                     {analysis && <div aria-live="polite" className={`mt-3 whitespace-pre-wrap text-xs leading-6 text-stone-600 ${enter}`}>{analysis}</div>}
+                    {analysis && !analyzing && !analysisComplete && <p role="status" className="mt-2 text-xs text-amber-800">Объяснение не завершено. Запросите его повторно.</p>}
                     {!analysis && !analyzing && <p className="mt-2 text-[10px] leading-4 text-stone-400">Сильные стороны плана и проблемы, которые ещё остались.</p>}
                   </div>
                 </div>

@@ -2,6 +2,8 @@
 
 import os
 
+import pytest
+
 from app.config import Settings, get_settings
 
 Settings.model_config["env_file"] = None
@@ -9,3 +11,14 @@ for name in ("OPENAI_API_KEY", "OPENAI_MODEL", "OPENAI_FALLBACK_MODEL", "OPENAI_
     os.environ.pop(name, None)
 os.environ["LLM_MOCK"] = "true"
 get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def reset_request_state():
+    from app.rate_limit import _requests
+
+    get_settings.cache_clear()
+    _requests.clear()
+    yield
+    get_settings.cache_clear()
+    _requests.clear()

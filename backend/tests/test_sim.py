@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app import llm, sim
+from app import analysis, llm, sim
 from app.config import get_settings
 from app.main import app
 
@@ -455,11 +455,11 @@ def test_analyze_api_passes_calculated_facts_to_llm(monkeypatch):
     get_settings.cache_clear()
     calls = []
 
-    async def fake_stream(messages, **kwargs):
+    async def fake_complete(messages, schema, **kwargs):
         calls.append(messages)
-        yield "Объяснение рассчитанного сценария"
+        return schema(paragraphs=[analysis.Paragraph(title="Итог", fact_ids=["summary"])])
 
-    monkeypatch.setattr(llm, "stream", fake_stream)
+    monkeypatch.setattr(llm, "complete_json", fake_complete)
     response = client.post("/api/sim/analyze", json=payload())
     assert response.status_code == 200
     assert sse_events(response)[-1] == {"done": True}
@@ -476,15 +476,14 @@ def test_analyze_provider_error_uses_existing_sse_error_format(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     get_settings.cache_clear()
 
-    async def failed_stream(*args, **kwargs):
-        yield "Начало ответа"
+    async def failed_complete(*args, **kwargs):
         raise llm.LLMError("Провайдер временно недоступен")
 
-    monkeypatch.setattr(llm, "stream", failed_stream)
+    monkeypatch.setattr(llm, "complete_json", failed_complete)
     response = client.post("/api/sim/analyze", json=payload())
     assert response.status_code == 200
     events = sse_events(response)
-    assert events[0] == {"delta": "Начало ответа"}
+    assert "56.54" in events[0]["delta"]
     assert events[-1]["error"] == "Провайдер временно недоступен"
     assert events[-1]["request_id"] == response.headers["X-Request-ID"]
     assert not any(item.get("done") for item in events)
