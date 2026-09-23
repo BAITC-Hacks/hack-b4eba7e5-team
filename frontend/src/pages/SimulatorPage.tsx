@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AstanaMap from '../components/AstanaMap'
 import { districtDisplayName } from '../lib/districts'
+import ScoreGauge from '../components/ScoreGauge'
 import {
   ApiError, analyzeScenario, evaluateScenario, getSimConfig,
   type Decision, type Evaluation, type Indicator, type Measure, type SimConfig,
@@ -368,13 +369,14 @@ export default function SimulatorPage() {
             <p className="text-xl font-semibold tabular-nums text-stone-600">{fmt(baseline.score)}</p>
           </div>}
           {result && <div className={`overflow-hidden rounded-none border border-teal-200 bg-white ${enter}`}>
-            <div aria-live="polite" className="bg-teal-50 p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-teal-800">Итоговый Score города</p>
-              <div className="mt-2 flex flex-wrap items-baseline gap-3">
-                <p className="text-4xl font-semibold tracking-tight tabular-nums text-teal-950">{fmt(result.score)}</p>
-                <p className="rounded-none bg-white px-2 py-1 text-xs font-medium tabular-nums text-teal-800" title="Прирост вычислен из значений до округления">{signed(result.score - baseline.score)}</p>
+            <div className="bg-stone-50 p-4">
+              <p className="text-center text-[10px] font-semibold uppercase tracking-wider text-stone-600">Итоговый Score города</p>
+              <ScoreGauge score={result.score} />
+              <p role="status" className="sr-only">План рассчитан. Score {fmt(result.score)} из 100.</p>
+              <div className="mt-2 flex justify-center">
+                <p className={`rounded-none px-2.5 py-1 text-xs font-medium tabular-nums ${result.score >= baseline.score ? 'bg-teal-50 text-teal-800' : 'bg-red-50 text-red-800'}`} title="Прирост вычислен из значений до округления">{signed(result.score - baseline.score)} к базе</p>
               </div>
-              <p className="mt-2 text-xs text-teal-700">Было {fmt(baseline.score)} · Через {dataset.horizon_quarters} кварталов</p>
+              <p className="mt-2 text-center text-[11px] text-stone-500">Было {fmt(baseline.score)} · Через {dataset.horizon_quarters} кварталов</p>
             </div>
             <div className="space-y-4 p-4">
               <dl className="space-y-2.5 text-xs">
