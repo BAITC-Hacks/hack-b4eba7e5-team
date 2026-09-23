@@ -16,7 +16,7 @@ export default function DistrictPopup({ district, dataset, hasResult, onClose, o
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       onWheel={(event) => event.stopPropagation()}
-      className="max-h-[400px] w-[min(300px,calc(100vw-56px))] overflow-y-auto overscroll-contain rounded-2xl border border-teal-100 bg-white/95 font-sans leading-4 text-stone-800 shadow-xl shadow-teal-950/15 backdrop-blur-md motion-safe:transition-[opacity,transform] motion-safe:duration-300 motion-safe:ease-out motion-safe:starting:scale-95 motion-safe:starting:opacity-0"
+      className="max-h-[400px] w-[min(300px,calc(100vw-56px))] origin-top-right overflow-y-auto overscroll-contain rounded-2xl border border-teal-100 bg-white/95 font-sans leading-4 text-stone-800 shadow-xl shadow-teal-950/15 backdrop-blur-md motion-safe:transition-[opacity,transform] motion-safe:duration-300 motion-safe:ease-out motion-safe:starting:scale-95 motion-safe:starting:opacity-0"
     >
       <div className="flex items-start justify-between gap-2 px-4 pt-3">
         <div>
