@@ -44,6 +44,7 @@ export async function streamSSE(
   body: unknown,
   onDelta: (text: string) => void,
   signal?: AbortSignal,
+  callbacks?: { onStatus?: (text: string) => void; onResult?: (value: unknown) => void },
 ): Promise<void> {
   let res: Response
   try {
@@ -54,7 +55,7 @@ export async function streamSSE(
       signal,
     })
   } catch {
-    if (signal?.aborted) return
+    if (signal?.aborted) throw new DOMException('Запрос остановлен', 'AbortError')
     throw new ApiError('Нет связи с сервером', 0)
   }
   if (!res.ok || !res.body) throw await parseError(res)
@@ -62,19 +63,40 @@ export async function streamSSE(
   const reader = res.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
-  for (;;) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-    const events = buffer.split('\n\n')
-    buffer = events.pop() ?? ''
-    for (const event of events) {
-      const line = event.trim()
-      if (!line.startsWith('data:')) continue
-      const data = JSON.parse(line.slice(5))
-      if (data.error) throw new ApiError(data.error, 502, data.request_id)
-      if (data.delta) onDelta(data.delta)
+  const requestId = res.headers.get('X-Request-ID') ?? undefined
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) throw new ApiError('Ответ не завершён: соединение прервано. Попробуйте ещё раз', 502, requestId)
+      buffer += decoder.decode(value, { stream: true })
+      const events = buffer.split(/\r?\n\r?\n/)
+      buffer = events.pop() ?? ''
+      for (const event of events) {
+        const lines = event.split(/\r?\n/).filter((line) => line.startsWith('data:'))
+        if (!lines.length) continue
+        const data: unknown = JSON.parse(lines.map((line) => line.slice(5).trimStart()).join('\n'))
+        if (typeof data !== 'object' || data === null) throw new Error('Invalid SSE')
+        if (('delta' in data && typeof data.delta !== 'string')
+          || ('status' in data && typeof data.status !== 'string')
+          || ('error' in data && typeof data.error !== 'string')
+          || ('done' in data && typeof data.done !== 'boolean')
+          || ('ping' in data && typeof data.ping !== 'boolean')) throw new Error('Invalid SSE fields')
+        if ('error' in data && typeof data.error === 'string') {
+          throw new ApiError(data.error, 502, 'request_id' in data && typeof data.request_id === 'string' ? data.request_id : requestId)
+        }
+        if ('delta' in data && typeof data.delta === 'string') onDelta(data.delta)
+        if ('status' in data && typeof data.status === 'string') callbacks?.onStatus?.(data.status)
+        if ('result' in data) callbacks?.onResult?.(data.result)
+        if ('done' in data && data.done === true) return
+      }
     }
+  } catch (err) {
+    if (signal?.aborted) throw new DOMException('Запрос остановлен', 'AbortError')
+    if (err instanceof ApiError) throw err
+    throw new ApiError('Ответ не завершён: ошибка передачи данных. Попробуйте ещё раз', 502, requestId)
+  } finally {
+    await reader.cancel().catch(() => undefined)
+    reader.releaseLock()
   }
 }
 
@@ -123,6 +145,14 @@ export const evaluateScenario = (decisions: Decision[]) =>
   api<Evaluation>('/api/sim/evaluate', { method: 'POST', json: { decisions } })
 export const analyzeScenario = (decisions: Decision[], onDelta: (text: string) => void, signal?: AbortSignal) =>
   streamSSE('/api/sim/analyze', { decisions }, onDelta, signal)
+
+export type Optimum = { decisions: Decision[]; result: Scenario; exact: boolean; evaluated: number }
+export const optimizeScenario = (
+  decisions: Decision[], onDelta: (text: string) => void, onStatus: (text: string) => void,
+  onResult: (value: Optimum) => void, signal?: AbortSignal,
+) => streamSSE('/api/sim/optimize', { decisions }, onDelta, signal, {
+  onStatus, onResult: (value) => onResult(value as Optimum),
+})
 
 // Локальные геослои загружаются только по запросу пользователя.
 export type MapLayerId = 'transport_stops' | 'green_spaces' | 'schools_kindergartens' | 'healthcare' | 'road_safety_objects'

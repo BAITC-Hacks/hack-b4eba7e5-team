@@ -8,6 +8,7 @@ import ScoreGauge from '../components/ScoreGauge'
 import DistrictPopup from '../components/DistrictPopup'
 import DistrictSelect from '../components/DistrictSelect'
 import MeasureDetails from '../components/MeasureDetails'
+import PlanAdvisor from '../components/PlanAdvisor'
 import {
   ApiError, analyzeScenario, evaluateScenario, getSimConfig,
   type Decision, type Evaluation, type Indicator, type Measure, type SimConfig,
@@ -43,6 +44,7 @@ export default function SimulatorPage() {
   const [calculating, setCalculating] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState('')
+  const [analysisComplete, setAnalysisComplete] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
   const [feedback, setFeedback] = useState('')
   const [tourOpen, setTourOpen] = useState(false)
@@ -110,11 +112,13 @@ export default function SimulatorPage() {
     const version = revision.current
     setAnalysis('')
     setAnalyzing(true)
+    setAnalysisComplete(false)
     setError(null)
     try {
       await analyzeScenario(decisions, (delta) => {
         if (version === revision.current && !controller.signal.aborted) setAnalysis((prev) => prev + delta)
       }, controller.signal)
+      if (!controller.signal.aborted && version === revision.current) setAnalysisComplete(true)
     } catch (err) {
       if (!controller.signal.aborted && version === revision.current) setError(toError(err))
     } finally {
@@ -416,6 +420,8 @@ export default function SimulatorPage() {
                 </div>
               </div>
 
+              <PlanAdvisor key={`${JSON.stringify(decisions)}:${Boolean(result)}`} config={config} decisions={decisions} current={result}
+                onApply={(plan) => { changePlan(plan, 'Предложенный план применён.'); void calculate(plan) }} />
               {error && <ErrorMessage error={error} />}
               {evaluation && !evaluation.valid && (
                 <div role="alert" className={`rounded-none border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900 ${enter}`}>
@@ -478,6 +484,7 @@ export default function SimulatorPage() {
                     </button>
                     {analyzing && <button className={`mt-1 min-h-9 rounded-none px-2 text-xs text-stone-500 underline underline-offset-4 ${focus}`} onClick={() => { analysisAbort.current?.abort(); setAnalyzing(false) }}>Остановить</button>}
                     {analysis && <div aria-live="polite" className={`mt-3 whitespace-pre-wrap text-xs leading-6 text-stone-600 ${enter}`}>{analysis}</div>}
+                    {analysis && !analyzing && !analysisComplete && <p role="status" className="mt-2 text-xs text-amber-800">Объяснение не завершено. Запросите его повторно.</p>}
                     {!analysis && !analyzing && <p className="mt-2 text-[10px] leading-4 text-stone-400">Сильные стороны плана и проблемы, которые ещё остались.</p>}
                   </div>
                 </div>
