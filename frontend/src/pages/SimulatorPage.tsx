@@ -216,13 +216,12 @@ export default function SimulatorPage() {
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-[2200px] flex-1 flex-col px-3 pb-5 pt-2 sm:px-5 2xl:px-6">
-      <section className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700">Городской симулятор</p>
+      <section className="mb-4 flex shrink-0 flex-wrap items-center justify-end gap-3">
         <div className="flex flex-wrap gap-1 text-xs">
           <button type="button" aria-label="Запустить подсказки" title="Подсказки" onClick={() => setTourOpen(true)} className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-lg font-semibold leading-none text-stone-700 hover:border-teal-700 hover:text-teal-800 ${focus} ${motion}`}>
             ?
           </button>
-          <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-none px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40 ${focus} ${motion}`}>
+          <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-none border border-stone-300 px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:border-transparent disabled:opacity-40 ${focus} ${motion}`}>
             Сбросить
           </button>
         </div>
