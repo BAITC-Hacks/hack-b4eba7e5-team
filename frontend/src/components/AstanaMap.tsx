@@ -3,6 +3,7 @@ import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
 import type { FilterSpecification, GeoJSONSource, LayerSpecification, Map as MapInstance, Marker, StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { getMapLayer, type District, type MapLayerId } from '../lib/api'
+import { districtDisplayName } from '../lib/districts'
 import districtJson from '../data/districts.json'
 import basemapJson from '../data/basemap.json'
 
@@ -42,7 +43,7 @@ function selection(map: MapInstance, id: string) {
 }
 
 function labelClass(selected: boolean, enabled: boolean) {
-  return `pointer-events-none rounded-full px-2.5 py-1 text-xs font-semibold shadow-sm transition-colors duration-200 motion-reduce:transition-none ${selected ? 'bg-teal-800 text-white' : enabled ? 'bg-white/90 text-slate-600' : 'bg-white/70 text-slate-400'}`
+  return `pointer-events-none rounded-none px-2.5 py-1 text-xs font-semibold transition-colors duration-200 motion-reduce:transition-none ${selected ? 'bg-teal-800 text-white' : enabled ? 'bg-white text-slate-600' : 'bg-white text-slate-400'}`
 }
 
 export default function AstanaMap({ districtId, onDistrictChange, districts }: {
@@ -130,6 +131,12 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
           const text = document.createElement('div')
           text.className = labelClass(id === selectedRef.current, case_district)
           text.textContent = case_district ? name : `${name} · вне кейса`
+          if (id === 'almaty') {
+            const note = document.createElement('span')
+            note.className = 'mt-0.5 block text-center text-[10px] font-normal'
+            note.textContent = 'Объединены для симуляции'
+            text.append(note)
+          }
           label.append(text)
           const marker = new maplibre.Marker({ element: label, anchor: 'center' }).setLngLat(label_point).addTo(map)
           labels.current.push({ id, enabled: case_district, marker, text })
@@ -200,40 +207,40 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
   }, [layer, ready, retry])
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-none border border-slate-200/80 bg-white ">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
         <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">Астана</span>
         <div role="group" aria-label="Выбор района" className="flex flex-wrap gap-1">
           {districts.map((district) => (
             <button key={district.id} type="button" aria-pressed={district.id === districtId}
               onClick={() => onDistrictChange(district.id)}
-              className={`min-h-9 rounded-full px-3 py-2 text-xs font-semibold transition-[background-color,color,box-shadow,transform] duration-200 ease-out active:scale-95 motion-reduce:transform-none motion-reduce:transition-none ${district.id === districtId ? 'bg-teal-800 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}>
-              {district.name}
+              className={`min-h-9 rounded-none px-3 py-2 text-xs font-semibold transition-[background-color,color,box-shadow,transform] duration-200 ease-out active:scale-95 motion-reduce:transform-none motion-reduce:transition-none ${district.id === districtId ? 'bg-teal-800 text-white ' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}>
+              {districtDisplayName(district.id, district.name)}
             </button>
           ))}
         </div>
       </div>
       <div className="relative isolate h-[440px] overflow-hidden bg-slate-100 sm:h-[520px] xl:h-[min(57vh,660px)] xl:min-h-[440px]">
-        <div ref={container} className="h-full w-full" role="region" aria-label={`Карта Астаны. Выбран район ${districts.find((d) => d.id === districtId)?.name ?? ''}`} />
-        {!ready && !mapError && <div role="status" className="pointer-events-none absolute inset-x-0 top-5 flex justify-center"><span className="rounded-full bg-white/95 px-4 py-2 text-xs text-slate-600 shadow-sm motion-safe:animate-pulse">Открываем карту…</span></div>}
+        <div ref={container} className="h-full w-full" role="region" aria-label={`Карта Астаны. Выбран район ${districtDisplayName(districtId, districts.find((d) => d.id === districtId)?.name ?? '')}`} />
+        {!ready && !mapError && <div role="status" className="pointer-events-none absolute inset-x-0 top-5 flex justify-center"><span className="rounded-none bg-white px-4 py-2 text-xs text-slate-600 motion-safe:animate-pulse">Открываем карту…</span></div>}
         {mapError && <div className="absolute inset-0 grid place-content-center gap-3 p-8 text-center">
           <p className="text-sm text-slate-600">Карта недоступна в этом браузере.<br />Выберите район кнопками сверху.</p>
-          <button type="button" onClick={() => { setMapError(false); setTilesError(false); setReady(false); setLayer(''); setRetry((n) => n + 1) }} className="rounded-full bg-white px-4 py-2 text-sm text-teal-800 shadow-sm">Повторить</button>
+          <button type="button" onClick={() => { setMapError(false); setTilesError(false); setReady(false); setLayer(''); setRetry((n) => n + 1) }} className="rounded-none bg-white px-4 py-2 text-sm text-teal-800 ">Повторить</button>
         </div>}
         {ready && !mapError && <>
-          <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-2xl bg-white/95 p-1.5 shadow-sm">
-            <button type="button" aria-label="Приблизить карту" onClick={() => mapRef.current?.zoomIn({ duration: reducedMotion() ? 0 : 250 })} className="h-9 w-9 rounded-xl text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">+</button>
-            <button type="button" aria-label="Отдалить карту" onClick={() => mapRef.current?.zoomOut({ duration: reducedMotion() ? 0 : 250 })} className="h-9 w-9 rounded-xl text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">−</button>
+          <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-none bg-white p-1.5 ">
+            <button type="button" aria-label="Приблизить карту" onClick={() => mapRef.current?.zoomIn({ duration: reducedMotion() ? 0 : 250 })} className="h-9 w-9 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">+</button>
+            <button type="button" aria-label="Отдалить карту" onClick={() => mapRef.current?.zoomOut({ duration: reducedMotion() ? 0 : 250 })} className="h-9 w-9 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">−</button>
           </div>
-          <button type="button" onClick={() => { mapRef.current?.stop(); mapRef.current?.fitBounds(cityBounds, { padding: 28, duration: reducedMotion() ? 0 : 650 }) }} className="absolute bottom-4 left-4 rounded-full bg-white/95 px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-white motion-reduce:transition-none">Весь город</button>
-          {tilesError && <p role="status" className="absolute bottom-4 right-4 max-w-48 rounded-xl bg-white/95 px-3 py-2 text-xs text-slate-500">Часть подложки недоступна. Районы можно выбирать.</p>}
+          <button type="button" onClick={() => { mapRef.current?.stop(); mapRef.current?.fitBounds(cityBounds, { padding: 28, duration: reducedMotion() ? 0 : 650 }) }} className="absolute bottom-4 left-4 rounded-none bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-white motion-reduce:transition-none">Весь город</button>
+          {tilesError && <p role="status" className="absolute bottom-4 right-4 max-w-48 rounded-none bg-white px-3 py-2 text-xs text-slate-500">Часть подложки недоступна. Районы можно выбирать.</p>}
         </>}
       </div>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
         <label className="flex items-center gap-2 text-xs text-slate-500">Объекты
           <select aria-label="Объекты на карте" value={layer} disabled={!ready || mapError}
             onChange={(event) => { setLayer(event.target.value as MapLayerId | ''); setLayerStatus(event.target.value ? 'loading' : 'idle') }}
-            className="min-h-9 max-w-48 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-offset-4 disabled:opacity-40">
+            className="min-h-9 max-w-48 rounded-none border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-offset-4 disabled:opacity-40">
             <option value="">Не показывать</option>
             {overlayNames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </select>

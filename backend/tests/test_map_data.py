@@ -1,4 +1,4 @@
-"""Граница Нуры не должна повторно выделяться как часть Есиля."""
+"""Объединение районов карты сохраняет покрытие и исходные ID расчёта."""
 
 import json
 import math
@@ -48,15 +48,16 @@ def ring_area(ring):
 def test_district_ids_match_case_data():
     dataset = json.loads((ROOT / "docs/dataset.json").read_text())
     names = {district["id"]: district["name"] for district in dataset["districts"]}
+    assert names["almaty"] == "Алматы"
+    display_names = names | {"almaty": "Алматы и Сарайшык"}
     assert DISTRICTS["type"] == "FeatureCollection"
-    assert len(FEATURES) == len(DISTRICTS["features"]) == 6
-    assert set(FEATURES) == set(names) | {"sarayshyk"}
+    assert len(FEATURES) == len(DISTRICTS["features"]) == 5
+    assert set(FEATURES) == set(names)
     for district_id, feature in FEATURES.items():
         properties = feature["properties"]
         assert properties["id"] == district_id
-        assert properties["case_district"] is (district_id in names)
-        if district_id in names:
-            assert properties["name"] == names[district_id]
+        assert properties["case_district"] is True
+        assert properties["name"] == display_names[district_id]
         assert contains(feature, properties["label_point"])
 
 
@@ -73,11 +74,44 @@ def test_district_ids_match_case_data():
         ("baikonur", (71.31733800947865, 51.28433265)),
         ("baikonur", (71.66573768103129, 51.3302766)),
         ("yesil", (71.40464334056625, 50.87198835)),
-        ("sarayshyk", (71.56586805666397, 51.1127271)),
+        # Основные территории Алматы и Сарайшыка выбирают один район кейса.
+        ("almaty", (71.54731723372703, 51.1550554)),
+        ("almaty", (71.56586805666397, 51.1127271)),
     ],
 )
 def test_each_regression_point_belongs_to_one_district(district_id, point):
     assert [key for key, feature in FEATURES.items() if contains(feature, point)] == [district_id]
+
+
+def test_almaty_union_dissolves_old_border_and_preserves_exterior():
+    feature = FEATURES["almaty"]
+    properties = feature["properties"]
+    assert properties["merged_from"] == ["almaty", "sarayshyk"]
+    assert properties["osm_id"] == 3482819
+    assert properties["osm_ids"] == [3482819, 19733918]
+    assert properties["label_point"] == [71.56586805666397, 51.1127271]
+    assert feature["geometry"]["type"] == "MultiPolygon"
+    assert len(polygons(feature)) == 2
+
+    # В середине прежней общей границы теперь внутренняя область одного полигона.
+    point = (71.57690068414514, 51.13394477660166)
+    assert contains(feature, point)
+    perimeter = 0
+    area = 0
+    for polygon in polygons(feature):
+        assert len(polygon) == 1
+        area += ring_area(polygon[0])
+        for start, end in pairwise(polygon[0]):
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            length = math.hypot(dx, dy)
+            perimeter += length
+            projection = ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length**2
+            fraction = min(1, max(0, projection))
+            nearest = (start[0] + fraction * dx, start[1] + fraction * dy)
+            assert math.dist(point, nearest) > 0.03
+    # Метрики объединения исходных областей без их общей внутренней границы.
+    assert area == pytest.approx(0.019881103949005025, abs=1e-12, rel=0)
+    assert perimeter == pytest.approx(0.8961629432247398, abs=1e-12, rel=0)
 
 
 def test_district_coverage_and_detached_parts_are_preserved():
@@ -87,7 +121,6 @@ def test_district_coverage_and_detached_parts_are_preserved():
         "yesil": 2,
         "saryarka": 1,
         "nura": 1,
-        "sarayshyk": 1,
     }
     area = 0
     for feature in FEATURES.values():
