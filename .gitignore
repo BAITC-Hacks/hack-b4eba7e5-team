@@ -1,0 +1,23 @@
+# секреты
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+
+# прочее
+.DS_Store
+*.log
+*.tgz
+
+# данные приложения
+backend/data/
