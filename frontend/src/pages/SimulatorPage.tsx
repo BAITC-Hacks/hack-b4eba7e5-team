@@ -216,15 +216,8 @@ export default function SimulatorPage() {
 
   return (
     <main className="mx-auto flex min-h-0 w-full max-w-[2200px] flex-1 flex-col px-3 pb-3 pt-4 sm:px-5 2xl:px-6">
-      <section className="mb-4 flex shrink-0 flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700">Городской симулятор</p>
-          <h2 className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Пять решений для Астаны</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-            Изучите районы и распределите между ними {dataset.decisions_required} мероприятий на весь город.
-            Вы выбираете меры и районы; система учитывает лаги и все положенные бонусы.
-          </p>
-        </div>
+      <section className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700">Городской симулятор</p>
         <div className="flex flex-wrap gap-1 text-xs">
           <button type="button" aria-label="Запустить подсказки" title="Подсказки" onClick={() => setTourOpen(true)} className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-lg font-semibold leading-none text-stone-700 hover:border-teal-700 hover:text-teal-800 ${focus} ${motion}`}>
             ?
