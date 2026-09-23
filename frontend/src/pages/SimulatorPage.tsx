@@ -469,7 +469,10 @@ export default function SimulatorPage() {
           </div>}
         </section>
       </div>
-      {tourOpen && <GuidedTour onClose={() => setTourOpen(false)} />}
+      {tourOpen && <>
+        <div aria-hidden="true" className="h-[352px]" />
+        <GuidedTour onClose={() => setTourOpen(false)} />
+      </>}
     </main>
   )
 }
