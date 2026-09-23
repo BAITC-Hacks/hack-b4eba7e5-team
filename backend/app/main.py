@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from app import llm
 from app.config import get_settings
 from app.logs import log_event, request_id_var, setup_logging
-from app.routes import chat
+from app.routes import chat, sim
 
 setup_logging()
 log = logging.getLogger("app")
@@ -67,3 +67,4 @@ async def health():
 # --- роутеры фич: по файлу в app/routes/ -------------------------------------
 
 app.include_router(chat.router)
+app.include_router(sim.router)

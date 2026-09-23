@@ -84,3 +84,37 @@ export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 
 export const streamChat = (messages: ChatMessage[], onDelta: (text: string) => void, signal?: AbortSignal) =>
   streamSSE('/api/chat/stream', { messages }, onDelta, signal)
+
+// --- симулятор ---------------------------------------------------------------
+
+export type Decision = { measure_id: string; district_id: string | null }
+export type Indicator = { code: string; direction: string; name: string; weight: number; meaning: string }
+export type District = {
+  id: string; name: string; population_share: number; profile: string; indicators: Record<string, number>
+}
+export type Measure = {
+  id: string; direction: string; name: string; scope: 'district' | 'city'
+  cost: number; lag: number; effects: Record<string, number>
+}
+export type Dataset = {
+  budget: number; decisions_required: number; max_per_direction: number; horizon_quarters: number
+  critical_threshold: number; directions: { id: string; name: string }[]
+  indicators: Indicator[]; districts: District[]; measures: Measure[]
+  synergies: { pair: string[]; bonus: Record<string, number> }[]
+  incompatibilities: { pair: string[]; same_district_only: boolean; reason: string }[]
+}
+export type Scenario = {
+  cost: number; remaining: number; score: number; d_avg: number; min_d: number; n_crit: number
+  districts: { id: string; name: string; score: number; indicators: Record<string, number> }[]
+  effects: { measure_id: string; district_id: string; indicator: string; value: number }[]
+  synergies: { pair: string[]; district_id: string; indicator: string; bonus: number }[]
+}
+export type SimConfig = { dataset: Dataset; baseline: Scenario; example: Decision[]; llm_mode: 'mock' | 'live' }
+export type Evaluation = {
+  valid: boolean; violations: { code: string; message: string }[]; result: Scenario | null
+}
+export const getSimConfig = () => api<SimConfig>('/api/sim/config')
+export const evaluateScenario = (decisions: Decision[]) =>
+  api<Evaluation>('/api/sim/evaluate', { method: 'POST', json: { decisions } })
+export const analyzeScenario = (decisions: Decision[], onDelta: (text: string) => void, signal?: AbortSignal) =>
+  streamSSE('/api/sim/analyze', { decisions }, onDelta, signal)
