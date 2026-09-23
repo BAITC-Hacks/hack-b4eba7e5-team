@@ -15,6 +15,23 @@ from app.main import app
 
 client = TestClient(app)
 
+EXPECTED_MEASURE_PREVIEWS = [
+    ("M1", 0.75, {"T1": 4.5, "T2": 6.75}),
+    ("M2", 0.75, {"T1": 3, "B2": 2.25}),
+    ("M3", 0.5, {"T1": 8, "T2": 10, "E2": 2}),
+    ("M4", 0.75, {"E1": 9, "E2": 2.25, "B1": 1.5}),
+    ("M5", 0.625, {"E2": 8.75, "C1": 2.5}),
+    ("M6", 0.5, {"E1": 2.5, "E2": 1.5}),
+    ("M7", 0.625, {"S1": 10}),
+    ("M8", 0.625, {"S2": 8.75}),
+    ("M9", 0.875, {"S1": 2.625, "S2": 2.625, "B1": 2.625}),
+    ("M10", 0.875, {"B1": 10.5, "B2": 1.75}),
+    ("M11", 0.875, {"B2": 10.5, "T1": -1.75}),
+    ("M12", 0.875, {"C2": 4.375}),
+    ("M13", 0.5, {"C1": 9, "E2": 1}),
+    ("M14", 0.875, {"C1": 4.375, "C2": 1.75}),
+]
+
 
 @pytest.fixture(autouse=True)
 def clear_settings_cache():
@@ -46,8 +63,8 @@ def sse_events(response) -> list[dict]:
 
 def test_runtime_dataset_matches_official_source():
     root = Path(__file__).resolve().parents[2]
-    official = json.loads((root / "docs/dataset.json").read_text())
-    runtime = json.loads((root / "backend/app/data/dataset.json").read_text())
+    official = json.loads((root / "docs/dataset.json").read_text(encoding="utf-8"))
+    runtime = json.loads((root / "backend/app/data/dataset.json").read_text(encoding="utf-8"))
     assert runtime == official
     assert sim.get_dataset().model_dump(mode="json") == official
 
@@ -70,6 +87,16 @@ def test_dataset_is_deeply_immutable():
         dataset.synergies[0].bonus["T1"] = 999
     assert isinstance(dataset.synergies[0].pair, tuple)
     assert isinstance(dataset.incompatibilities[0].pair, tuple)
+
+
+@pytest.mark.parametrize(("measure_id", "effect_share", "effects"), EXPECTED_MEASURE_PREVIEWS)
+def test_measure_previews_match_lag_adjusted_reference_values(measure_id, effect_share, effects):
+    dataset = sim.get_dataset()
+    measure = next(item for item in dataset.measures if item.id == measure_id)
+    preview = sim.measure_preview(measure, dataset)
+    assert preview.measure_id == measure_id
+    assert preview.effect_share == effect_share
+    assert dict(preview.effects) == effects
 
 
 def test_baseline_matches_official_values():
@@ -198,7 +225,7 @@ def test_all_incompatibilities_respect_district_scope(first, second, second_dist
 
 
 @pytest.mark.parametrize(
-    ("chosen", "pair", "indicator", "target_value", "other_value"),
+    ("chosen", "pair", "indicator", "target_value", "other_value", "moved_nura", "moved_yesil"),
     [
         (
             decisions(("M1", "nura"), ("M2", None), ("M9", "almaty"), ("M10", "almaty"), ("M14", None)),
@@ -206,6 +233,8 @@ def test_all_incompatibilities_respect_district_scope(first, second, second_dist
             "T1",
             64.5,
             48,
+            58,
+            54.5,
         ),
         (
             decisions(("M10", "nura"), ("M12", None), ("M4", "almaty"), ("M8", "nura"), ("M14", None)),
@@ -213,6 +242,8 @@ def test_all_incompatibilities_respect_district_scope(first, second, second_dist
             "B1",
             67.5,
             78,
+            55,
+            90.5,
         ),
         (
             decisions(("M5", "nura"), ("M6", None), ("M9", "almaty"), ("M10", "almaty"), ("M14", None)),
@@ -220,11 +251,13 @@ def test_all_incompatibilities_respect_district_scope(first, second, second_dist
             "E2",
             77.25,
             73.5,
+            66.5,
+            84.25,
         ),
     ],
 )
 def test_synergy_is_fixed_and_only_applies_in_the_first_measures_district(
-    chosen, pair, indicator, target_value, other_value
+    chosen, pair, indicator, target_value, other_value, moved_nura, moved_yesil
 ):
     result = sim.evaluate(chosen).result
     assert result is not None
@@ -236,6 +269,34 @@ def test_synergy_is_fixed_and_only_applies_in_the_first_measures_district(
     assert bonus.district_id == "nura"
     assert bonus.indicator == indicator
     assert bonus.bonus == 2
+
+    relocated = [
+        item.model_copy(update={"district_id": "yesil"}) if item.measure_id == pair[0] else item
+        for item in chosen
+    ]
+    moved = sim.evaluate(relocated).result
+    assert moved is not None
+    assert district(moved, "nura").indicators[indicator] == moved_nura
+    assert district(moved, "yesil").indicators[indicator] == moved_yesil
+    assert len(moved.synergies) == 1
+    assert moved.synergies[0].district_id == "yesil"
+    assert moved.synergies[0].bonus == 2
+
+
+def test_all_available_synergies_apply_together_to_the_selected_districts():
+    chosen = decisions(("M1", "almaty"), ("M2", None), ("M9", "nura"), ("M10", "saryarka"), ("M12", None))
+    result = sim.evaluate(chosen).result
+    assert result is not None
+    assert {(item.pair, item.district_id, item.indicator, item.bonus) for item in result.synergies} == {
+        (("M1", "M2"), "almaty", "T1", 2),
+        (("M10", "M12"), "saryarka", "B1", 2),
+    }
+    assert district(result, "almaty").indicators["T1"] == 49.5
+    assert district(result, "saryarka").indicators["B1"] == 70.5
+    assert district(result, "nura").indicators["B1"] == 57.625
+    assert result.cost == 76
+    assert result.n_crit == 1
+    assert result.score == pytest.approx(55.235095)
 
 
 def test_negative_m11_effect_is_kept_and_scaled_by_lag():
@@ -312,6 +373,10 @@ def test_config_api_exposes_official_dataset_and_baseline():
     assert response.status_code == 200
     config = response.json()
     assert config["dataset"] == sim.get_dataset().model_dump(mode="json")
+    assert config["measure_previews"] == [
+        {"measure_id": measure_id, "effect_share": share, "effects": effects}
+        for measure_id, share, effects in EXPECTED_MEASURE_PREVIEWS
+    ]
     assert config["baseline"]["score"] == pytest.approx(52.55768)
     assert config["example"] == payload()["decisions"]
     assert config["llm_mode"] == "mock"
@@ -325,6 +390,20 @@ def test_evaluate_api_returns_server_calculated_example():
     assert not result["violations"]
     assert result["result"]["cost"] == 95
     assert result["result"]["score"] == pytest.approx(56.54307)
+
+
+@pytest.mark.parametrize(("district_id", "expected_score"), [("saryarka", 56.54307), ("nura", 56.87287)])
+def test_evaluate_api_keeps_the_users_district_assignment(district_id, expected_score):
+    chosen = [
+        item.model_copy(update={"district_id": district_id}) if item.measure_id == "M5" else item
+        for item in sim.example_decisions()
+    ]
+    response = client.post("/api/sim/evaluate", json=payload(chosen))
+    assert response.status_code == 200
+    result = response.json()["result"]
+    assert result is not None
+    assert result["score"] == pytest.approx(expected_score)
+    assert {item["district_id"] for item in result["effects"] if item["measure_id"] == "M5"} == {district_id}
 
 
 @pytest.mark.parametrize("chosen", [[], decisions(("M99", None)) + sim.example_decisions()[1:]])

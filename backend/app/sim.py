@@ -62,6 +62,12 @@ class Measure(FrozenModel):
     effects: Effects = Field(min_length=1, max_length=10)
 
 
+class MeasurePreview(FrozenModel):
+    measure_id: Identifier
+    effect_share: float = Field(ge=0, le=1, allow_inf_nan=False)
+    effects: Effects = Field(min_length=1, max_length=10)
+
+
 class Synergy(FrozenModel):
     pair: tuple[Identifier, Identifier]
     bonus: Effects = Field(min_length=1, max_length=10)
@@ -149,6 +155,7 @@ class Evaluation(FrozenModel):
 
 class SimulationConfig(FrozenModel):
     dataset: Dataset
+    measure_previews: tuple[MeasurePreview, ...] = Field(min_length=14, max_length=14)
     baseline: Scenario
     example: tuple[Decision, ...] = Field(min_length=5, max_length=5)
     llm_mode: Literal["mock", "live"]
@@ -156,11 +163,23 @@ class SimulationConfig(FrozenModel):
 
 @lru_cache
 def get_dataset() -> Dataset:
-    return Dataset.model_validate_json(Path(__file__).with_name("data").joinpath("dataset.json").read_text())
+    return Dataset.model_validate_json(
+        Path(__file__).with_name("data").joinpath("dataset.json").read_text(encoding="utf-8")
+    )
 
 
 # Чтение локальных данных происходит при импорте, до обработки async-запросов.
 get_dataset()
+
+
+def measure_preview(measure: Measure, dataset: Dataset) -> MeasurePreview:
+    """Прямые эффекты за горизонт симуляции, до синергий и ограничения 0–100."""
+    share = (dataset.horizon_quarters - measure.lag) / dataset.horizon_quarters
+    return MeasurePreview(
+        measure_id=measure.id,
+        effect_share=share,
+        effects={indicator: full_effect * share for indicator, full_effect in measure.effects.items()},
+    )
 
 
 def example_decisions() -> list[Decision]:
@@ -243,10 +262,9 @@ def _calculate(decisions: Sequence[Decision], dataset: Dataset) -> Scenario:
             continue
         cost += measure.cost
         targets = tuple(values) if measure.scope == "city" else (decision.district_id,)
-        share = (dataset.horizon_quarters - measure.lag) / dataset.horizon_quarters
+        preview = measure_preview(measure, dataset)
         for district_id in targets:
-            for indicator, full_effect in measure.effects.items():
-                effect = full_effect * share
+            for indicator, effect in preview.effects.items():
                 values[district_id][indicator] += effect
                 effects.append(
                     MeasureEffect(
