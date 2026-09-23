@@ -5,6 +5,7 @@ import type { FilterSpecification, LayerSpecification, Map as MapInstance, Marke
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { ApiError, getMapLayer, type District, type MapLayerId } from '../lib/api'
 import { districtDisplayName } from '../lib/districts'
+import { mapViewportOptions, observeMapSize } from '../lib/mapViewport'
 import districtJson from '../data/districts.json'
 import basemapJson from '../data/basemap.json'
 import DistrictSelect from './DistrictSelect'
@@ -177,7 +178,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
   useEffect(() => {
     let cancelled = false
     let map: MapInstance | undefined
-    let observer: ResizeObserver | undefined
+    let stopObservingSize: (() => void) | undefined
     let watchdog: ReturnType<typeof setTimeout> | undefined
     const pendingRequests = requests.current
     const setup = async () => {
@@ -197,7 +198,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
           maxBounds: [[70.4, 50.5], [72.6, 51.9]], minZoom: 8.5, maxZoom: 16,
           dragRotate: false, pitchWithRotate: false, touchPitch: false,
           attributionControl: false, renderWorldCopies: false,
-          cooperativeGestures: false, scrollZoom: false,
+          ...mapViewportOptions,
         })
         mapRef.current = map
         popupRef.current = new maplibre.Popup({
@@ -248,8 +249,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
         map.getCanvas().addEventListener('mouseleave', () => {
           if (mounted.getLayer('case-hover')) mounted.setFilter('case-hover', ['==', ['get', 'id'], ''])
         })
-        observer = new ResizeObserver(() => mounted.resize())
-        observer.observe(container.current)
+        stopObservingSize = observeMapSize(mounted, container.current)
       } catch {
         if (!cancelled) { setMapError(true); setReady(false) }
       }
@@ -258,7 +258,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
     return () => {
       cancelled = true
       clearTimeout(watchdog)
-      observer?.disconnect()
+      stopObservingSize?.()
       for (const controller of pendingRequests.values()) controller.abort()
       pendingRequests.clear()
       labels.current.forEach((label) => label.marker.remove())
