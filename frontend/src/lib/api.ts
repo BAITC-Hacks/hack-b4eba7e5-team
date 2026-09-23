@@ -96,8 +96,10 @@ export type Measure = {
   id: string; direction: string; name: string; scope: 'district' | 'city'
   cost: number; lag: number; effects: Record<string, number>
 }
+export type MeasurePreview = { measure_id: string; effect_share: number; effects: Record<string, number> }
 export type Dataset = {
   budget: number; decisions_required: number; max_per_direction: number; horizon_quarters: number
+  score_formula: { avg_weight: number; min_weight: number; critical_penalty: number }
   critical_threshold: number; directions: { id: string; name: string }[]
   indicators: Indicator[]; districts: District[]; measures: Measure[]
   synergies: { pair: string[]; bonus: Record<string, number> }[]
@@ -109,7 +111,10 @@ export type Scenario = {
   effects: { measure_id: string; district_id: string; indicator: string; value: number }[]
   synergies: { pair: string[]; district_id: string; indicator: string; bonus: number }[]
 }
-export type SimConfig = { dataset: Dataset; baseline: Scenario; example: Decision[]; llm_mode: 'mock' | 'live' }
+export type SimConfig = {
+  dataset: Dataset; baseline: Scenario; example: Decision[]; llm_mode: 'mock' | 'live'
+  measure_previews: MeasurePreview[]
+}
 export type Evaluation = {
   valid: boolean; violations: { code: string; message: string }[]; result: Scenario | null
 }

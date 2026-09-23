@@ -92,8 +92,10 @@ async def _mock_analysis(result: sim.Scenario) -> AsyncIterator[str]:
 
 @router.get("/config")
 async def config() -> sim.SimulationConfig:
+    dataset = sim.get_dataset()
     return sim.SimulationConfig(
-        dataset=sim.get_dataset(),
+        dataset=dataset,
+        measure_previews=tuple(sim.measure_preview(measure, dataset) for measure in dataset.measures),
         baseline=sim.baseline(),
         example=tuple(sim.example_decisions()),
         llm_mode="mock" if get_settings().mock_mode else "live",

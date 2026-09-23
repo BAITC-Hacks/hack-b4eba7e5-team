@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
-import type { FilterSpecification, LayerSpecification, Map as MapInstance, Marker, StyleSpecification } from 'maplibre-gl'
+import type { FilterSpecification, LayerSpecification, Map as MapInstance, Marker, Popup, StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { ApiError, getMapLayer, type District, type MapLayerId } from '../lib/api'
 import { districtDisplayName } from '../lib/districts'
@@ -68,12 +69,17 @@ function labelClass(selected: boolean, enabled: boolean) {
   return `pointer-events-none whitespace-nowrap rounded-none px-1.5 py-0.5 text-[11px] font-medium transition-colors duration-200 motion-reduce:transition-none ${selected ? 'bg-teal-800 text-white' : enabled ? 'bg-white text-slate-600' : 'bg-white text-slate-400'}`
 }
 
-export default function AstanaMap({ districtId, onDistrictChange, districts }: {
+export default function AstanaMap({ districtId, onDistrictChange, districts, renderSummary }: {
   districtId: string; onDistrictChange: (id: string) => void; districts: District[]
+  renderSummary: (onClose: () => void) => ReactNode
 }) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapInstance | null>(null)
   const toolbar = useRef<HTMLDivElement>(null)
+  const districtSelect = useRef<HTMLSelectElement>(null)
+  const popupRef = useRef<Popup | null>(null)
+  const [popupHost] = useState(() => document.createElement('div'))
+  const [popupDistrictId, setPopupDistrictId] = useState<string | null>(null)
   const labels = useRef<{ id: string; enabled: boolean; marker: Marker; text: HTMLDivElement }[]>([])
   const selectedRef = useRef(districtId)
   const pendingFocus = useRef<string | null>(null)
@@ -89,7 +95,65 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
   const requests = useRef(new Map<MapLayerId, AbortController>())
   const failedLayers = useRef(new Set<MapLayerId>())
 
+  const closeSummary = useCallback(() => {
+    setPopupDistrictId(null)
+  }, [])
+
+  function chooseDistrict(id: string) {
+    onDistrictChange(id)
+    setPopupDistrictId(id)
+  }
+
   useEffect(() => { onChangeRef.current = onDistrictChange }, [onDistrictChange])
+
+  useEffect(() => {
+    if (!popupDistrictId) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Escape в модальных подсказках не должен закрывать карточку за ними.
+      if (event.target instanceof Element && event.target.closest('dialog[open]')) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeSummary()
+        districtSelect.current?.focus({ preventScroll: true })
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [popupDistrictId, closeSummary])
+
+  useEffect(() => {
+    const map = mapRef.current
+    const popup = popupRef.current
+    if (!map || !popup || !ready || mapError || popupDistrictId !== districtId) return
+    const feature = districtsGeo.features.find((item) => item.properties.id === popupDistrictId)
+    if (!feature) return
+    const anchor = feature.properties.label_point
+    popup.setDOMContent(popupHost).setLngLat(anchor).addTo(map)
+    // Держим карточку рядом с районом, но целиком внутри карты даже на телефоне.
+    const reposition = () => {
+      const point = map.project(anchor)
+      const halfWidth = popupHost.offsetWidth / 2
+      const halfHeight = popupHost.offsetHeight / 2
+      const mapElement = map.getContainer()
+      const x = Math.max(halfWidth + 12, Math.min(point.x, mapElement.clientWidth - halfWidth - 12))
+      const maxY = mapElement.clientHeight - halfHeight - 12
+      const minY = Math.min(maxY, halfHeight + (toolbar.current?.offsetHeight ?? 0) + 24)
+      const y = Math.max(minY, Math.min(point.y, maxY))
+      popup.setOffset([x - point.x, y - point.y])
+    }
+    reposition()
+    const observer = new ResizeObserver(reposition)
+    observer.observe(popupHost)
+    if (toolbar.current) observer.observe(toolbar.current)
+    map.on('move', reposition)
+    map.on('resize', reposition)
+    return () => {
+      observer.disconnect()
+      map.off('move', reposition)
+      map.off('resize', reposition)
+      popup.remove()
+    }
+  }, [popupDistrictId, districtId, popupHost, ready, mapError, retry])
 
   useEffect(() => {
     const changed = selectedRef.current !== districtId
@@ -135,6 +199,11 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
           cooperativeGestures: false, scrollZoom: false,
         })
         mapRef.current = map
+        popupRef.current = new maplibre.Popup({
+          anchor: 'center', closeButton: false, closeOnClick: false, closeOnMove: false,
+          focusAfterOpen: false, maxWidth: 'none', subpixelPositioning: true,
+          className: 'z-10 [&_.maplibregl-popup-tip]:hidden! [&_.maplibregl-popup-content]:p-0! [&_.maplibregl-popup-content]:bg-transparent! [&_.maplibregl-popup-content]:shadow-none!',
+        })
         map.touchZoomRotate.disableRotation()
         const mounted = map
         // Не ждём загрузки всех внешних тайлов, чтобы разрешить выбор районов.
@@ -153,7 +222,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
           label.setAttribute('aria-hidden', 'true')
           const text = document.createElement('div')
           text.className = labelClass(id === selectedRef.current, case_district)
-          text.textContent = case_district ? name : `${name} · вне кейса`
+          text.textContent = case_district ? districtDisplayName(id, name) : `${name} · вне кейса`
           label.append(text)
           const marker = new maplibre.Marker({ element: label, anchor: 'center' }).setLngLat(label_point).addTo(map)
           labels.current.push({ id, enabled: case_district, marker, text })
@@ -162,7 +231,10 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
           if (!mounted.getLayer('case-fill')) return
           const feature = mounted.queryRenderedFeatures(event.point, { layers: ['case-fill'] })
             .find((f) => f.properties.case_district === true)
-          if (feature && typeof feature.properties.id === 'string') onChangeRef.current(feature.properties.id)
+          if (feature && typeof feature.properties.id === 'string') {
+            onChangeRef.current(feature.properties.id)
+            setPopupDistrictId(feature.properties.id)
+          } else setPopupDistrictId(null)
         })
         map.on('mousemove', (event) => {
           if (!mounted.getLayer('case-fill')) return
@@ -190,6 +262,8 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
       pendingRequests.clear()
       labels.current.forEach((label) => label.marker.remove())
       labels.current = []
+      popupRef.current?.remove()
+      popupRef.current = null
       map?.remove()
       mapRef.current = null
     }
@@ -244,12 +318,15 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
 
   return (
     <div className="overflow-hidden rounded-none border border-slate-200 bg-white">
-      <div className="relative isolate h-[520px] overflow-hidden bg-slate-100 sm:h-[600px] lg:h-[min(74vh,760px)] lg:min-h-[640px]">
+      <div className="relative isolate h-[560px] overflow-hidden bg-slate-100 sm:h-[600px] lg:h-[min(74vh,760px)] lg:min-h-[640px]">
         <div ref={container} className="h-full w-full" role="region" aria-label={`Карта Астаны. Выбран район ${districtDisplayName(districtId, districts.find((d) => d.id === districtId)?.name ?? '')}`} />
+        {popupDistrictId === districtId && (ready && !mapError
+          ? createPortal(<div key={districtId}>{renderSummary(closeSummary)}</div>, popupHost)
+          : <div key={districtId} className="absolute inset-x-3 bottom-3 z-10 flex justify-center">{renderSummary(closeSummary)}</div>)}
         <div ref={toolbar} className="pointer-events-none absolute inset-x-3 top-3 flex flex-col items-start gap-2">
           <label className="pointer-events-auto flex max-w-full items-center gap-2 border border-slate-300 bg-white py-1 pl-3 pr-2">
             <span className="text-[11px] font-medium text-slate-500">Район</span>
-            <select aria-label="Район" value={districtId} onChange={(event) => onDistrictChange(event.target.value)}
+            <select ref={districtSelect} id="map-district-select" aria-label="Район" value={districtId} onChange={(event) => chooseDistrict(event.target.value)}
               className="min-h-8 min-w-0 max-w-full rounded-none bg-white pr-4 text-xs font-semibold text-slate-800 outline-offset-4">
               {districts.map((district) => <option key={district.id} value={district.id}>{districtDisplayName(district.id, district.name)}</option>)}
             </select>
@@ -282,14 +359,14 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
         {!ready && !mapError && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600 motion-safe:animate-pulse">Открываем карту…</span></div>}
         {mapError && <div className="absolute inset-x-0 bottom-0 top-48 grid place-content-center gap-3 p-8 text-center">
           <p className="text-sm text-slate-600">Карта недоступна в этом браузере.</p>
-          <button type="button" onClick={() => { setMapError(false); setTilesError(false); setReady(false); setRetry((n) => n + 1) }} className="rounded-none border border-slate-300 bg-white px-4 py-2 text-sm text-teal-800">Повторить</button>
+          <button type="button" onClick={() => { setPopupDistrictId(null); setMapError(false); setTilesError(false); setReady(false); setRetry((n) => n + 1) }} className="rounded-none border border-slate-300 bg-white px-4 py-2 text-sm text-teal-800">Повторить</button>
         </div>}
         {ready && !mapError && <>
           <div className="absolute bottom-3 right-3 flex flex-col divide-y divide-slate-200 border border-slate-300 bg-white">
             <button type="button" aria-label="Приблизить карту" onClick={() => mapRef.current?.zoomIn({ duration: reducedMotion() ? 0 : 250 })} className="h-10 w-10 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">+</button>
             <button type="button" aria-label="Отдалить карту" onClick={() => mapRef.current?.zoomOut({ duration: reducedMotion() ? 0 : 250 })} className="h-10 w-10 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">−</button>
           </div>
-          <button type="button" onClick={() => { mapRef.current?.stop(); mapRef.current?.fitBounds(cityBounds, { padding: viewPadding(toolbar.current), duration: reducedMotion() ? 0 : 650 }) }} className="absolute bottom-3 left-3 min-h-10 rounded-none border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 motion-reduce:transition-none">Весь город</button>
+          <button type="button" onClick={() => { setPopupDistrictId(null); mapRef.current?.stop(); mapRef.current?.fitBounds(cityBounds, { padding: viewPadding(toolbar.current), duration: reducedMotion() ? 0 : 650 }) }} className="absolute bottom-3 left-3 min-h-10 rounded-none border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 motion-reduce:transition-none">Весь город</button>
           {tilesError && <p role="status" className="absolute bottom-16 left-3 max-w-48 border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Часть подложки недоступна.</p>}
         </>}
       </div>

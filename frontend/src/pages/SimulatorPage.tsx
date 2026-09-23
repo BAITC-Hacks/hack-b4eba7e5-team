@@ -3,6 +3,8 @@ import AstanaMap from '../components/AstanaMap'
 import GuidedTour from '../components/GuidedTour'
 import { districtDisplayName } from '../lib/districts'
 import ScoreGauge from '../components/ScoreGauge'
+import DistrictPopup from '../components/DistrictPopup'
+import MeasureDetails from '../components/MeasureDetails'
 import {
   ApiError, analyzeScenario, evaluateScenario, getSimConfig,
   type Decision, type Evaluation, type Indicator, type Measure, type SimConfig,
@@ -41,6 +43,15 @@ export default function SimulatorPage() {
   const revision = useRef(0)
   const calculationRequest = useRef(0)
   const analysisAbort = useRef<AbortController | null>(null)
+  const fullStatistics = useRef<HTMLDivElement>(null)
+
+  function showFullStatistics() {
+    fullStatistics.current?.focus({ preventScroll: true })
+    fullStatistics.current?.scrollIntoView({
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+      block: 'start',
+    })
+  }
 
   useEffect(() => {
     let current = true
@@ -139,15 +150,29 @@ export default function SimulatorPage() {
     return <main className="mx-auto max-w-2xl p-6"><p className="rounded-none border border-stone-200 bg-white p-6 text-sm text-stone-600">Пока нет данных для симуляции.</p></main>
   }
 
+  function conflictReason(measure: Measure, targetDistrictId: string): string | null {
+    const conflict = dataset.incompatibilities.find((rule) => rule.pair.includes(measure.id) && decisions.some((decision) => (
+      decision.measure_id !== measure.id && rule.pair.includes(decision.measure_id)
+      && (!rule.same_district_only || decision.district_id === targetDistrictId)
+    )))
+    return conflict ? `${conflict.pair.join(' + ')}: ${conflict.reason}.` : null
+  }
+
   function disabledReason(measure: Measure): string | null {
     if (decisions.length >= dataset.decisions_required) return 'План заполнен. Уберите одну меру, чтобы добавить новую.'
     if (directionCount(measure.direction) >= dataset.max_per_direction) return `Уже выбрано ${dataset.max_per_direction} меры этого направления.`
     if (cost + measure.cost > dataset.budget) return `Не хватает ${fmt(cost + measure.cost - dataset.budget)} ед. бюджета.`
-    const conflict = dataset.incompatibilities.find((rule) => rule.pair.includes(measure.id) && decisions.some((decision) => (
-      rule.pair.includes(decision.measure_id)
-      && (!rule.same_district_only || decision.district_id === district.id)
-    )))
-    return conflict ? `Несовместимо: ${conflict.reason}.` : null
+    return conflictReason(measure, district.id)
+  }
+
+  function moveMeasure(measure: Measure, targetDistrictId: string) {
+    const reason = conflictReason(measure, targetDistrictId)
+    if (reason) {
+      setFeedback(reason)
+      return
+    }
+    changePlan(decisions.map((item) => item.measure_id === measure.id ? { ...item, district_id: targetDistrictId } : item),
+      `Район меры изменён: ${districtName(targetDistrictId)}.`)
   }
 
   function toggleMeasure(measure: Measure) {
@@ -166,7 +191,8 @@ export default function SimulatorPage() {
     return (
       <div key={indicator.code} className="flex items-center justify-between gap-3 border-t border-stone-100 py-2.5 text-xs">
         <div className="min-w-0">
-          <p className="leading-5 text-stone-600">{indicator.name}</p>
+          <p className="leading-5 text-stone-600" title={indicator.meaning}>{indicator.name}</p>
+          <p className="text-[10px] text-stone-400">{indicator.code} · Вес в оценке района: {fmt(indicator.weight * 100)}%</p>
           {critical && <p className="text-[11px] text-amber-700">Ниже порога {dataset.critical_threshold}</p>}
         </div>
         <span className="flex shrink-0 items-center gap-2 tabular-nums">
@@ -178,8 +204,12 @@ export default function SimulatorPage() {
     )
   }
 
-  const orderedIndicators = [...dataset.indicators].sort((a, b) => before.indicators[a.code] - before.indicators[b.code])
   const isComplete = decisions.length === dataset.decisions_required
+  const weakestDistricts = result?.districts.filter((item) => item.score === result.min_d) ?? []
+  const criticalIndicators = result?.districts.flatMap((item) => (
+    dataset.indicators.filter((indicator) => item.indicators[indicator.code] < dataset.critical_threshold)
+      .map((indicator) => ({ district: item, indicator, value: item.indicators[indicator.code] }))
+  )) ?? []
 
   return (
     <main className="mx-auto max-w-[2200px] px-3 pb-10 pt-5 sm:px-5 2xl:px-6">
@@ -188,7 +218,8 @@ export default function SimulatorPage() {
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700">Городской симулятор</p>
           <h2 className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Пять решений для Астаны</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-stone-500">
-            Выберите район, добавьте {dataset.decisions_required} мер и узнайте, как изменится жизнь города.
+            Изучите районы и распределите между ними {dataset.decisions_required} мероприятий на весь город.
+            Вы выбираете меры и районы; система учитывает лаги и все положенные бонусы.
           </p>
         </div>
         <div className="flex flex-wrap gap-1 text-xs">
@@ -235,6 +266,7 @@ export default function SimulatorPage() {
                       <div className="space-y-2 px-3 pb-3">
                         {dataset.measures.filter((measure) => measure.direction === direction.id).map((measure) => {
                           const selected = decisions.find((decision) => decision.measure_id === measure.id)
+                          const preview = config.measure_previews.find((item) => item.measure_id === measure.id)
                           const reason = selected ? null : disabledReason(measure)
                           return (
                             <article key={measure.id} className={`rounded-none border p-3 motion-safe:transition-colors motion-safe:duration-200 ${selected ? 'border-teal-300 bg-teal-50' : 'border-stone-200/80 bg-stone-50'}`}>
@@ -242,7 +274,8 @@ export default function SimulatorPage() {
                                 <h4 className="text-xs font-medium leading-5 text-stone-800">{measure.name}</h4>
                                 <span className="shrink-0 text-sm font-semibold tabular-nums text-stone-800">{measure.cost}<span className="ml-0.5 text-[10px] font-normal text-stone-500">ед.</span></span>
                               </div>
-                              <p className="mt-1.5 text-[11px] leading-5 text-stone-500">{measure.scope === 'city' ? 'Весь город' : 'Один район'} · Через {measure.lag} кв.</p>
+                              <p className="mt-1.5 text-[11px] leading-5 text-stone-500">{measure.scope === 'city' ? 'Весь город · одно решение' : 'Один район'}</p>
+                              {preview && <MeasureDetails measure={measure} preview={preview} dataset={dataset} decisions={decisions} />}
                               <button
                                 aria-label={`${selected ? 'Убрать' : 'Добавить'}: ${measure.name}`}
                                 aria-describedby={reason ? `reason-${measure.id}` : undefined}
@@ -266,12 +299,16 @@ export default function SimulatorPage() {
         </section>
 
         <section aria-label="Карта и состояние района" className="order-1 min-w-0 space-y-4 md:col-span-2 lg:col-span-1 lg:row-span-2 lg:col-start-1 lg:row-start-1">
-          <div data-tour="map"><AstanaMap districtId={district.id} onDistrictChange={setDistrictId} districts={dataset.districts} /></div>
-          <div data-tour="district" className="rounded-none border border-stone-200/80 bg-white p-4 sm:p-5">
+          <div data-tour="map">
+            <AstanaMap districtId={district.id} onDistrictChange={setDistrictId} districts={dataset.districts}
+              renderSummary={(onClose) => <DistrictPopup district={after ?? before} dataset={dataset} hasResult={Boolean(after)} onClose={onClose} onFullFormat={showFullStatistics} />} />
+          </div>
+          <div data-tour="district" ref={fullStatistics} id="district-statistics" role="region" aria-labelledby="district-statistics-title" tabIndex={-1}
+            className="scroll-mt-6 rounded-none border border-stone-200/80 bg-white p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400">Выбранный район</p>
-                <h3 className="mt-1 text-lg font-semibold text-stone-900">{districtName(district.id)}</h3>
+                <h3 id="district-statistics-title" className="mt-1 text-lg font-semibold text-stone-900">{districtName(district.id)}</h3>
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[10px] text-stone-500">Оценка района</p>
@@ -282,15 +319,19 @@ export default function SimulatorPage() {
               </div>
             </div>
             <p className="mt-2 text-xs leading-5 text-stone-500">{district.profile}</p>
+            <p className="mt-1 text-[11px] text-stone-400">Доля населения города: {fmt(district.population_share * 100)}%. Учитывается в среднем балле города.</p>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-1 pb-1 text-[10px] text-stone-400">
-              <span>Низкие показатели района</span>
+              <span>Показатели по направлениям</span>
               <span>{after ? `До → через ${dataset.horizon_quarters} кварталов` : 'От 0 до 100 · выше — лучше'}</span>
             </div>
-            <div key={district.id} className={enter}>{orderedIndicators.slice(0, 3).map(indicatorRow)}</div>
-            <details className="group mt-1 border-t border-stone-100 text-xs">
-              <summary className={`cursor-pointer rounded-none py-3 font-medium text-stone-500 hover:text-teal-700 ${focus}`}>Все показатели района</summary>
-              <div>{orderedIndicators.slice(3).map(indicatorRow)}</div>
-            </details>
+            <div key={district.id} className={`mt-2 grid gap-x-5 gap-y-3 sm:grid-cols-2 ${enter}`}>
+              {dataset.directions.map((direction) => (
+                <div key={direction.id} className="min-w-0">
+                  <h4 className="mb-1 text-xs font-semibold text-stone-700">{direction.name}</h4>
+                  {dataset.indicators.filter((indicator) => indicator.direction === direction.id).map(indicatorRow)}
+                </div>
+              ))}
+            </div>
             <p className="mt-1 text-[10px] leading-4 text-stone-400">
               {district.id === 'almaty' ? 'Алматы и Сарайшык объединены на карте; расчёт по данным Алматы из ТЗ.' : 'Данные районов условные, из задания.'}
               {' '}Порог критического значения — ниже {dataset.critical_threshold}.
@@ -308,6 +349,8 @@ export default function SimulatorPage() {
             <ol className="mt-4 space-y-2">
               {decisions.map((decision, index) => {
                 const measure = dataset.measures.find((item) => item.id === decision.measure_id)!
+                const blockedDistricts = measure.scope === 'district'
+                  ? dataset.districts.filter((item) => conflictReason(measure, item.id)) : []
                 return (
                   <li key={decision.measure_id} className={`rounded-none border border-stone-200/80 bg-stone-50 p-2.5 ${enter}`}>
                     <div className="flex items-start gap-2">
@@ -319,14 +362,18 @@ export default function SimulatorPage() {
                       {measure.scope === 'district' ? (
                         <select
                           aria-label={`Район: ${measure.name}`} value={decision.district_id ?? ''}
-                          onChange={(event) => changePlan(decisions.map((item) => item.measure_id === measure.id ? { ...item, district_id: event.target.value } : item), `Район меры изменён: ${districtName(event.target.value)}.`)}
+                          onChange={(event) => moveMeasure(measure, event.target.value)}
+                          aria-describedby={blockedDistricts.length ? `district-conflict-${measure.id}` : undefined}
                           className={`min-h-9 min-w-0 max-w-full flex-1 rounded-none border border-stone-200 bg-white px-2 text-xs text-stone-600 ${focus} ${motion}`}
                         >
-                          {dataset.districts.map((item) => <option key={item.id} value={item.id}>{districtName(item.id)}</option>)}
+                          {dataset.districts.map((item) => <option key={item.id} value={item.id} disabled={Boolean(conflictReason(measure, item.id))}>{districtName(item.id)}{conflictReason(measure, item.id) ? ' — конфликт мер' : ''}</option>)}
                         </select>
                       ) : <span className="py-2 text-[11px] text-stone-500">Весь город</span>}
                       <span className="shrink-0 text-[11px] tabular-nums text-stone-500">{measure.cost} ед.</span>
                     </div>
+                    {blockedDistricts.length > 0 && <p id={`district-conflict-${measure.id}`} className="mt-2 text-[10px] leading-4 text-amber-800">
+                      {blockedDistricts.map((item) => `${districtName(item.id)}: ${conflictReason(measure, item.id)}`).join(' ')}
+                    </p>}
                   </li>
                 )
               })}
@@ -378,16 +425,30 @@ export default function SimulatorPage() {
             <div className="space-y-4 p-4">
               <dl className="space-y-2.5 text-xs">
                 <div className="flex justify-between gap-2"><dt className="text-stone-500">Среднее по городу</dt><dd className="font-medium tabular-nums text-stone-800">{fmt(result.d_avg)}</dd></div>
-                <div className="flex justify-between gap-2"><dt className="text-stone-500">Слабейший район</dt><dd className="font-medium tabular-nums text-stone-800">{fmt(result.min_d)}</dd></div>
+                <div className="flex justify-between gap-2"><dt className="text-stone-500">Слабейший район</dt><dd className="text-right font-medium tabular-nums text-stone-800">{weakestDistricts.map((item) => districtName(item.id)).join(', ')} · {fmt(result.min_d)}</dd></div>
                 <div className="flex justify-between gap-2"><dt className="text-stone-500">Критические показатели</dt><dd className="font-medium tabular-nums text-stone-800">{baseline.n_crit} → {result.n_crit}</dd></div>
               </dl>
+              <p className="text-[11px] leading-5 text-stone-500">Результат ваших пяти решений. Чтобы повысить Score, измените план и рассчитайте его снова.</p>
+              <div className="text-[11px] leading-5">
+                <h4 className="font-semibold text-stone-700">Бонусы применены автоматически</h4>
+                {result.synergies.length > 0 ? (
+                  <ul className="mt-2 space-y-2 text-teal-800">{result.synergies.map((synergy, index) => <li key={index}>{synergy.pair.join(' + ')} · {districtName(synergy.district_id)}: {indicatorName(synergy.indicator)} {signed(synergy.bonus)}</li>)}</ul>
+                ) : <p className="mt-1 text-stone-500">В этом наборе нет пар с дополнительным бонусом.</p>}
+              </div>
               <details className="text-xs">
                 <summary className={`cursor-pointer rounded-none py-1 font-medium text-stone-500 hover:text-teal-700 ${focus}`}>Из чего складывается результат</summary>
-                <p className="mt-3 text-[11px] leading-5 text-stone-500">Score = 70% среднего + 30% оценки слабейшего района − число критических показателей.</p>
-                {result.synergies.length > 0 && <div className="mt-3 rounded-none bg-teal-50 p-3 text-[11px] leading-5 text-teal-800">
-                  <p className="font-semibold">Сработавшие синергии</p>
-                  <ul className="mt-1 space-y-2">{result.synergies.map((synergy, index) => <li key={index}>{synergy.pair.join(' + ')} · {districtName(synergy.district_id)}: {indicatorName(synergy.indicator)} {signed(synergy.bonus)}</li>)}</ul>
+                <p className="mt-3 text-[11px] leading-5 text-stone-500">Score = {fmt(dataset.score_formula.avg_weight * 100)}% среднего + {fmt(dataset.score_formula.min_weight * 100)}% оценки слабейшего района − {fmt(dataset.score_formula.critical_penalty)} за каждый показатель ниже {dataset.critical_threshold}.</p>
+                <p className="mt-2 text-[11px] leading-5 text-stone-500">Эффект меры = полный эффект × ({dataset.horizon_quarters} − лаг) / {dataset.horizon_quarters}. Бонусы добавляются целиком, затем показатели ограничиваются от 0 до 100.</p>
+                <table className="mt-3 w-full text-left text-[11px] tabular-nums">
+                  <caption className="mb-2 text-left font-medium text-stone-700">Оценки районов</caption>
+                  <thead><tr className="text-stone-500"><th scope="col" className="py-1">Район</th><th scope="col">Было</th><th scope="col">Стало</th></tr></thead>
+                  <tbody>{result.districts.map((item) => <tr key={item.id} className="border-t border-stone-100 text-stone-600"><th scope="row" className="py-1 font-normal">{districtName(item.id)}</th><td>{fmt(baseline.districts.find((initial) => initial.id === item.id)!.score)}</td><td>{fmt(item.score)}</td></tr>)}</tbody>
+                </table>
+                {criticalIndicators.length > 0 && <div className="mt-3 text-[11px] leading-5 text-amber-800">
+                  <p className="font-semibold">За что начислен штраф</p>
+                  <ul>{criticalIndicators.map((item) => <li key={`${item.district.id}-${item.indicator.code}`}>{districtName(item.district.id)} · {item.indicator.name}: {fmt(item.value)}</li>)}</ul>
                 </div>}
+                <p className="mt-3 font-medium text-stone-700">Прямые изменения показателей от мер</p>
                 <ul className="mt-3 space-y-3 text-[11px] leading-5 text-stone-500">
                   {result.effects.map((effect, index) => <li key={index}><span className="font-medium text-stone-700">{measureName(effect.measure_id)}</span><br />{districtName(effect.district_id)} · {indicatorName(effect.indicator)} {signed(effect.value)}</li>)}
                 </ul>
