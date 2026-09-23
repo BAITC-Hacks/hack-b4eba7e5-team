@@ -185,8 +185,8 @@ export default function SimulatorPage() {
   const isComplete = decisions.length === dataset.decisions_required
 
   return (
-    <main className="mx-auto max-w-[1800px] px-3 pb-10 pt-6 sm:px-6 sm:pt-7 2xl:px-8">
-      <section className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <main className="mx-auto max-w-[2200px] px-3 pb-10 pt-5 sm:px-5 2xl:px-6">
+      <section className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700">Городской симулятор</p>
           <h2 className="text-2xl font-semibold tracking-tight text-stone-900 sm:text-3xl">Пять решений для Астаны</h2>
@@ -205,8 +205,8 @@ export default function SimulatorPage() {
       </section>
       <p aria-live="polite" role="status" className="sr-only">{feedback}</p>
 
-      <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-[264px_minmax(0,1fr)_292px] 2xl:grid-cols-[280px_minmax(0,1fr)_308px]">
-        <section aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-none border border-stone-200/80 bg-white xl:order-1">
+      <div className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <section aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-none border border-stone-200/80 bg-white lg:col-start-2 lg:row-start-1">
           <div className="border-b border-stone-100 p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 id="catalog-title" className="text-sm font-semibold text-stone-900">Мероприятия</h3>
@@ -268,7 +268,7 @@ export default function SimulatorPage() {
           </div>
         </section>
 
-        <section aria-label="Карта и состояние района" className="order-1 min-w-0 space-y-4 lg:col-span-2 xl:order-2 xl:col-span-1">
+        <section aria-label="Карта и состояние района" className="order-1 min-w-0 space-y-4 md:col-span-2 lg:col-span-1 lg:row-span-2 lg:col-start-1 lg:row-start-1">
           <AstanaMap districtId={district.id} onDistrictChange={setDistrictId} districts={dataset.districts} />
           <div className="rounded-none border border-stone-200/80 bg-white p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
@@ -301,7 +301,7 @@ export default function SimulatorPage() {
           </div>
         </section>
 
-        <section aria-labelledby="plan-title" className="order-3 min-w-0 space-y-4">
+        <section aria-labelledby="plan-title" className="order-3 min-w-0 space-y-4 lg:col-start-2 lg:row-start-2">
           <div className="rounded-none border border-stone-200/80 bg-white p-4 ">
             <div className="flex items-center justify-between gap-3">
               <h3 id="plan-title" className="text-sm font-semibold text-stone-900">Ваш план</h3>
