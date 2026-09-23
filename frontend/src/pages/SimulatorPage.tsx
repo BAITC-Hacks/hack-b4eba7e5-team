@@ -215,7 +215,7 @@ export default function SimulatorPage() {
   )) ?? []
 
   return (
-    <main className="mx-auto flex min-h-0 w-full max-w-[2200px] flex-1 flex-col px-3 pb-3 pt-4 sm:px-5 2xl:px-6">
+    <main className="mx-auto flex min-h-0 w-full max-w-[2200px] flex-1 flex-col px-3 pb-5 pt-2 sm:px-5 2xl:px-6">
       <section className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-3">
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700">Городской симулятор</p>
         <div className="flex flex-wrap gap-1 text-xs">
