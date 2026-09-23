@@ -275,9 +275,9 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
   }
 
   return (
-    <div className="overflow-hidden rounded-none border border-slate-200 bg-white">
-      <div className="@container relative isolate overflow-hidden bg-slate-100">
-        <div ref={toolbar} className="relative z-20 flex flex-col items-start gap-2 p-3 @min-[600px]:pointer-events-none @min-[600px]:absolute @min-[600px]:left-3 @min-[600px]:right-[279px] @min-[600px]:top-3 @min-[600px]:p-0">
+    <div className="flex h-full flex-col overflow-hidden rounded-none border border-slate-200 bg-white">
+      <div className="@container relative isolate flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-100">
+        <div ref={toolbar} className="relative z-20 flex shrink-0 flex-col items-start gap-2 p-3 @min-[600px]:pointer-events-none @min-[600px]:absolute @min-[600px]:left-3 @min-[600px]:right-[279px] @min-[600px]:top-3 @min-[600px]:p-0">
           <DistrictSelect buttonRef={districtSelect} id="map-district-select" label="Район" prefix="Район"
             value={districtId} onChange={chooseDistrict} className="pointer-events-auto w-[260px] max-w-full"
             options={districts.map((district) => ({ value: district.id, label: districtDisplayName(district.id, district.name) }))} />
@@ -306,7 +306,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
             })}
           </div>
         </div>
-        <div className="relative h-[560px] sm:h-[600px] lg:h-[min(74vh,760px)] lg:min-h-[640px]">
+        <div className="relative min-h-0 flex-1">
           <div ref={container} className="h-full w-full" role="region" aria-label={`Карта Астаны. Выбран район ${districtDisplayName(districtId, districts.find((d) => d.id === districtId)?.name ?? '')}`} />
           {popupDistrictId === districtId && <div key={districtId} className="absolute right-3 top-3 z-10 origin-top-right scale-[0.85]">{renderSummary(closeSummary)}</div>}
           {!ready && !mapError && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600 motion-safe:animate-pulse">Открываем карту…</span></div>}
@@ -324,7 +324,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
           </>}
         </div>
       </div>
-      <div className="border-t border-slate-100 px-3 py-2 text-right text-[10px] text-slate-400">
+      <div className="shrink-0 border-t border-slate-100 px-3 py-2 text-right text-[10px] text-slate-400">
         © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenStreetMap</a> · <a href="https://openfreemap.org/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenMapTiles</a>
       </div>
     </div>

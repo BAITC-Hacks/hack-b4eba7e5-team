@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { scrollPanelTo } from '../lib/scrollPanel'
 import { getTourSpotlight, type TourRect } from '../lib/tour'
 
 const steps = [
@@ -12,6 +13,7 @@ const steps = [
 
 const emptyRect: TourRect = { x: 0, y: 0, width: 0, height: 0 }
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+type PanelScroll = { panel: HTMLElement; left: number; top: number }
 
 export default function GuidedTour({ onClose }: { onClose: () => void }) {
   const [step, setStep] = useState(0)
@@ -23,7 +25,7 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const navigation = useRef<ReturnType<typeof setTimeout> | null>(null)
   const nextButton = useRef<HTMLButtonElement>(null)
-  const initialScroll = useRef({ left: 0, top: 0 })
+  const initialScroll = useRef<{ left: number; top: number; panels: PanelScroll[] } | null>(null)
   const finish = useRef(onClose)
   const maskId = useId()
   const headingId = useId()
@@ -36,7 +38,13 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
     const modal = dialog.current
     if (!modal) return
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    initialScroll.current = { left: window.scrollX, top: window.scrollY }
+    initialScroll.current ??= {
+      left: window.scrollX,
+      top: window.scrollY,
+      panels: Array.from(document.querySelectorAll<HTMLElement>('[data-scroll-panel]'), (panel) => ({
+        panel, left: panel.scrollLeft, top: panel.scrollTop,
+      })),
+    }
     const wasLocked = document.documentElement.classList.contains('overflow-hidden')
     document.documentElement.classList.add('overflow-hidden')
     modal.showModal()
@@ -52,52 +60,72 @@ export default function GuidedTour({ onClose }: { onClose: () => void }) {
   useLayoutEffect(() => {
     const target = document.querySelector<HTMLElement>(`[data-tour="${current.target}"]`)
     if (!target) { finish.current(); return }
+    const panel = target.closest<HTMLElement>('[data-scroll-panel]')
     let frame = 0
     function measure() {
       if (!target) return
       const rect = target.getBoundingClientRect()
+      const panelRect = panel?.getBoundingClientRect()
       setHighlight(getTourSpotlight(
         { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
         { width: window.innerWidth, height: window.innerHeight },
+        panel && panelRect ? {
+          x: panelRect.x + panel.clientLeft, y: panelRect.y + panel.clientTop,
+          width: panel.clientWidth, height: panel.clientHeight,
+        } : undefined,
       ))
     }
     function scheduleMeasure() {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(measure)
     }
-    // Плавно двигаем страницу; карточка закреплена, подсветка следует блоку без задержки.
-    const top = target.getBoundingClientRect().top + window.scrollY - 24
-    window.scrollTo({ top: Math.max(0, top), behavior: reducedMotion() ? 'instant' : 'smooth' })
+    const behavior = reducedMotion() ? 'instant' : 'smooth'
+    scrollPanelTo(target, behavior)
+    // На телефоне сначала показываем панель, внутри неё прокручиваем только нужный раздел.
+    const scrollTarget = (panel ?? target).getBoundingClientRect()
+    if (!panel || scrollTarget.top < 24 || scrollTarget.bottom > window.innerHeight - 24) {
+      window.scrollTo({ top: Math.max(0, scrollTarget.top + window.scrollY - 24), behavior })
+    }
     measure()
     const reveal = requestAnimationFrame(() => setStepVisible(true))
     const observer = new ResizeObserver(scheduleMeasure)
     observer.observe(target)
-    window.addEventListener('scroll', scheduleMeasure, { passive: true })
+    if (panel) observer.observe(panel)
+    window.addEventListener('scroll', scheduleMeasure, { passive: true, capture: true })
     window.addEventListener('resize', scheduleMeasure)
     return () => {
       cancelAnimationFrame(frame)
       cancelAnimationFrame(reveal)
       observer.disconnect()
-      window.removeEventListener('scroll', scheduleMeasure)
+      window.removeEventListener('scroll', scheduleMeasure, true)
       window.removeEventListener('resize', scheduleMeasure)
     }
   }, [current])
 
   useEffect(() => {
-    if (!closing) return
+    if (!closing || !initialScroll.current) return
     const reduce = reducedMotion()
-    const { left, top } = initialScroll.current
+    const { left, top, panels } = initialScroll.current
     const destination = {
       left: Math.min(left, Math.max(0, document.documentElement.scrollWidth - window.innerWidth)),
       top: Math.min(top, Math.max(0, document.documentElement.scrollHeight - window.innerHeight)),
     }
     const started = performance.now()
     let frame = 0
-    window.scrollTo({ ...destination, behavior: reduce ? 'instant' : 'smooth' })
-    // Сохраняем высоту страницы до конца возврата, чтобы удаление отступа не обрывало скролл.
+    const behavior = reduce ? 'instant' : 'smooth'
+    const panelDestinations = panels.filter(({ panel }) => panel.isConnected).map(({ panel, left, top }) => ({
+      panel,
+      left: Math.min(left, Math.max(0, panel.scrollWidth - panel.clientWidth)),
+      top: Math.min(top, Math.max(0, panel.scrollHeight - panel.clientHeight)),
+    }))
+    for (const { panel, left, top } of panelDestinations) panel.scrollTo({ left, top, behavior })
+    window.scrollTo({ ...destination, behavior })
+    // Дожидаемся плавного возврата обеих панелей и страницы до закрытия подсказок.
     function waitForReturn(now: number) {
       const returned = Math.abs(window.scrollX - destination.left) <= 1
         && Math.abs(window.scrollY - destination.top) <= 1
+        && panelDestinations.every(({ panel, left, top }) => !panel.isConnected
+          || (Math.abs(panel.scrollLeft - left) <= 1 && Math.abs(panel.scrollTop - top) <= 1))
       const elapsed = now - started
       if ((returned && elapsed >= (reduce ? 0 : 180)) || elapsed >= 1500) {
         finish.current()

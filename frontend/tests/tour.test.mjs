@@ -67,6 +67,39 @@ test('Полностью скрытый элемент не превращает
   }
 })
 
+test('Подсветка ограничена видимой областью прокручиваемой панели', () => {
+  assert.deepEqual(
+    getTourSpotlight(
+      { x: 50, y: 80, width: 600, height: 900 },
+      { width: 1280, height: 800 },
+      { x: 100, y: 150, width: 400, height: 350 },
+    ),
+    { x: 100, y: 150, width: 400, height: 350 },
+  )
+})
+
+test('Подсветка скрытого раздела не выходит за границы панели', () => {
+  const viewport = { width: 1280, height: 800 }
+  const panel = { x: 100, y: 150, width: 400, height: 350 }
+  for (const y of [-200, 600]) {
+    const rect = getTourSpotlight({ x: 150, y, width: 200, height: 100 }, viewport, panel)
+    assertInside(rect, viewport)
+    assert.equal(rect.height, 0)
+    assert.ok(rect.y >= panel.y && rect.y <= panel.y + panel.height)
+  }
+})
+
+test('Панель на телефоне одновременно ограничена собственными границами и экраном', () => {
+  assert.deepEqual(
+    getTourSpotlight(
+      { x: 16, y: -300, width: 328, height: 1500 },
+      { width: 360, height: 640 },
+      { x: 16, y: -100, width: 328, height: 500 },
+    ),
+    { x: 16, y: 8, width: 328, height: 392 },
+  )
+})
+
 test('Геометрия конечна, воспроизводима и не меняет входные объекты', () => {
   for (const viewport of [{ width: 360, height: 640 }, { width: 4, height: 4 }, { width: 0, height: 0 }]) {
     for (const target of [

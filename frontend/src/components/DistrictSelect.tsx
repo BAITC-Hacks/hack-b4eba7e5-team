@@ -1,4 +1,5 @@
 import { useEffect, useId, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent, type Ref } from 'react'
+import { revealSelectMenu, selectMenuHeightClass } from '../lib/districtSelectLayout'
 
 type DistrictSelectProps = {
   id?: string
@@ -23,6 +24,7 @@ export default function DistrictSelect({
   const list = useRef<HTMLUListElement>(null)
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
+  const [menuHeight, setMenuHeight] = useState('max-h-60')
   const selected = options.findIndex((option) => option.value === value)
   const enabled = options.flatMap((option, index) => option.disabled ? [] : [index])
   const activeOption = options[active]
@@ -42,16 +44,38 @@ export default function DistrictSelect({
     const menu = list.current
     const option = menu?.children[active]
     if (!open || !menu || !(option instanceof HTMLElement)) return
+    if (button.current) revealSelectMenu(button.current, menu)
     // Прокручиваем только список, сохраняя положение карты и страницы.
     if (option.offsetTop < menu.scrollTop) menu.scrollTop = option.offsetTop
     else if (option.offsetTop + option.offsetHeight > menu.scrollTop + menu.clientHeight) {
       menu.scrollTop = option.offsetTop + option.offsetHeight - menu.clientHeight
     }
-  }, [open, active])
+  }, [open, active, menuHeight])
+
+  useEffect(() => {
+    if (!open) return
+    const control = button.current
+    const panel = control?.closest<HTMLElement>('[data-scroll-panel]')
+    if (!control || !panel) return
+    const observer = new ResizeObserver(() => {
+      setMenuHeight(selectMenuHeightClass(panel.clientHeight, control.getBoundingClientRect().height))
+      if (list.current) revealSelectMenu(control, list.current)
+    })
+    observer.observe(panel)
+    return () => observer.disconnect()
+  }, [open])
+
+  function openMenu() {
+    const control = button.current
+    const panel = control?.closest<HTMLElement>('[data-scroll-panel]')
+    setMenuHeight(control && panel
+      ? selectMenuHeightClass(panel.clientHeight, control.getBoundingClientRect().height) : 'max-h-60')
+    setOpen(true)
+  }
 
   function show(last = false) {
     setActive(selected >= 0 && !options[selected].disabled ? selected : (last ? enabled.at(-1) : enabled[0]) ?? -1)
-    setOpen(true)
+    openMenu()
     button.current?.focus({ preventScroll: true })
   }
 
@@ -76,7 +100,7 @@ export default function DistrictSelect({
       if (open) choose(active)
       else show()
     } else if (event.key === 'Home' || event.key === 'End') {
-      setOpen(true)
+      openMenu()
       setActive((event.key === 'Home' ? enabled[0] : enabled.at(-1)) ?? -1)
     } else if (!open) show(event.key === 'ArrowUp')
     else if (enabled.length) {
@@ -104,7 +128,7 @@ export default function DistrictSelect({
         </svg>
       </button>
       {open && <ul ref={list} id={listId} role="listbox" aria-label={label}
-        className="absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto overscroll-contain border border-slate-300 bg-white p-1 motion-safe:transition-[opacity,translate] motion-safe:duration-150 motion-safe:starting:-translate-y-1 motion-safe:starting:opacity-0">
+        className={`absolute left-0 right-0 top-full z-30 mt-1 ${menuHeight} overflow-y-auto overscroll-contain border border-slate-300 bg-white p-1 motion-safe:transition-[opacity,translate] motion-safe:duration-150 motion-safe:starting:-translate-y-1 motion-safe:starting:opacity-0`}>
         {options.map((option, index) => <li key={option.value} id={`${listId}-${index}`} role="option"
           aria-selected={option.value === value} aria-disabled={option.disabled || undefined}
           onPointerDown={(event) => event.preventDefault()}
