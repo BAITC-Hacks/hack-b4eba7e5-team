@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FeatureCollection, MultiPolygon, Polygon } from 'geojson'
-import type { FilterSpecification, GeoJSONSource, LayerSpecification, Map as MapInstance, Marker, StyleSpecification } from 'maplibre-gl'
+import type { FilterSpecification, LayerSpecification, Map as MapInstance, Marker, StyleSpecification } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { getMapLayer, type District, type MapLayerId } from '../lib/api'
+import { ApiError, getMapLayer, type District, type MapLayerId } from '../lib/api'
 import { districtDisplayName } from '../lib/districts'
 import districtJson from '../data/districts.json'
 import basemapJson from '../data/basemap.json'
@@ -15,13 +15,35 @@ const districtsGeo = districtJson as FeatureCollection<Polygon | MultiPolygon, M
 const cityBounds: [number, number, number, number] = [71.217973, 50.857608, 71.785191, 51.35111]
 const sourceId = 'case-districts'
 const noSelection: FilterSpecification = ['==', ['get', 'id'], '']
-const overlayNames: { id: MapLayerId; name: string }[] = [
-  { id: 'transport_stops', name: 'Остановки' },
-  { id: 'green_spaces', name: 'Зелёные зоны' },
-  { id: 'schools_kindergartens', name: 'Школы и детсады' },
-  { id: 'healthcare', name: 'Медучреждения' },
-  { id: 'road_safety_objects', name: 'Переходы и освещение' },
+type Overlay = { id: MapLayerId; name: string; color: string; dotClass: string; activeClass: string }
+type OverlayStatus = { state: 'loading' | 'ready' | 'empty' | 'error'; message?: string; requestId?: string }
+const overlays: Overlay[] = [
+  { id: 'transport_stops', name: 'Остановки', color: '#2563eb', dotClass: 'bg-blue-600', activeClass: 'border-blue-500 bg-blue-50 text-blue-900' },
+  { id: 'green_spaces', name: 'Зелёные зоны', color: '#16a34a', dotClass: 'bg-green-600', activeClass: 'border-green-500 bg-green-50 text-green-900' },
+  { id: 'schools_kindergartens', name: 'Школы и детсады', color: '#9333ea', dotClass: 'bg-purple-600', activeClass: 'border-purple-500 bg-purple-50 text-purple-900' },
+  { id: 'healthcare', name: 'Медучреждения', color: '#e11d48', dotClass: 'bg-rose-600', activeClass: 'border-rose-500 bg-rose-50 text-rose-900' },
+  { id: 'road_safety_objects', name: 'Переходы и освещение', color: '#d97706', dotClass: 'bg-amber-600', activeClass: 'border-amber-500 bg-amber-50 text-amber-900' },
 ]
+
+function contextLayerIds(id: MapLayerId) {
+  return [`context-${id}-areas`, `context-${id}-lines`, `context-${id}-points`]
+}
+
+function showContext(map: MapInstance, overlay: Overlay, data: FeatureCollection) {
+  const source = `context-${overlay.id}`
+  const [areas, lines, points] = contextLayerIds(overlay.id)
+  if (!map.getSource(source)) {
+    map.addSource(source, { type: 'geojson', data })
+    map.addLayer({ id: areas, type: 'fill', source, filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': overlay.color, 'fill-opacity': 0.3 } })
+    map.addLayer({ id: lines, type: 'line', source, filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': overlay.color, 'line-width': 2, 'line-opacity': 0.85 } })
+    map.addLayer({ id: points, type: 'circle', source, filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': overlay.color, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 2.5, 14, 5], 'circle-opacity': 0.95, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1 } })
+  }
+  for (const id of [areas, lines, points]) map.setLayoutProperty(id, 'visibility', 'visible')
+}
+
+function viewPadding(toolbar: HTMLDivElement | null) {
+  return { top: (toolbar?.offsetHeight ?? 100) + 24, right: 32, bottom: 60, left: 32 }
+}
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 function districtLayers(selected: string): LayerSpecification[] {
@@ -43,7 +65,7 @@ function selection(map: MapInstance, id: string) {
 }
 
 function labelClass(selected: boolean, enabled: boolean) {
-  return `pointer-events-none rounded-none px-2.5 py-1 text-xs font-semibold transition-colors duration-200 motion-reduce:transition-none ${selected ? 'bg-teal-800 text-white' : enabled ? 'bg-white text-slate-600' : 'bg-white text-slate-400'}`
+  return `pointer-events-none whitespace-nowrap rounded-none px-1.5 py-0.5 text-[11px] font-medium transition-colors duration-200 motion-reduce:transition-none ${selected ? 'bg-teal-800 text-white' : enabled ? 'bg-white text-slate-600' : 'bg-white text-slate-400'}`
 }
 
 export default function AstanaMap({ districtId, onDistrictChange, districts }: {
@@ -51,6 +73,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
 }) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapInstance | null>(null)
+  const toolbar = useRef<HTMLDivElement>(null)
   const labels = useRef<{ id: string; enabled: boolean; marker: Marker; text: HTMLDivElement }[]>([])
   const selectedRef = useRef(districtId)
   const pendingFocus = useRef<string | null>(null)
@@ -59,9 +82,12 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
   const [mapError, setMapError] = useState(false)
   const [tilesError, setTilesError] = useState(false)
   const [retry, setRetry] = useState(0)
-  const [layer, setLayer] = useState<MapLayerId | ''>('')
-  const [layerStatus, setLayerStatus] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [selectedLayers, setSelectedLayers] = useState<MapLayerId[]>([])
+  const [layerStatus, setLayerStatus] = useState<Partial<Record<MapLayerId, OverlayStatus>>>({})
+  const [layerRetry, setLayerRetry] = useState(0)
   const cache = useRef(new Map<MapLayerId, FeatureCollection>())
+  const requests = useRef(new Map<MapLayerId, AbortController>())
+  const failedLayers = useRef(new Set<MapLayerId>())
 
   useEffect(() => { onChangeRef.current = onDistrictChange }, [onDistrictChange])
 
@@ -77,7 +103,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
       const feature = districtsGeo.features.find((f) => f.properties.id === districtId)
       if (feature) {
         map.stop()
-        map.fitBounds(feature.properties.bounds, { padding: 44, duration: reducedMotion() ? 0 : 700, maxZoom: 12.4 })
+        map.fitBounds(feature.properties.bounds, { padding: viewPadding(toolbar.current), duration: reducedMotion() ? 0 : 700, maxZoom: 12.4 })
         pendingFocus.current = null
       }
     }
@@ -88,6 +114,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
     let map: MapInstance | undefined
     let observer: ResizeObserver | undefined
     let watchdog: ReturnType<typeof setTimeout> | undefined
+    const pendingRequests = requests.current
     const setup = async () => {
       try {
         const maplibre = await import('maplibre-gl')
@@ -98,18 +125,14 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
           sources: { ...(basemapJson as StyleSpecification).sources, [sourceId]: { type: 'geojson', data: districtsGeo } },
           layers: [...(basemapJson as StyleSpecification).layers, ...districtLayers(selectedRef.current)],
         }
+        const initialDistrict = districtsGeo.features.find((feature) => feature.properties.id === selectedRef.current)
         map = new maplibre.Map({
-          container: container.current, style, bounds: cityBounds,
-          fitBoundsOptions: { padding: 28 },
+          container: container.current, style, bounds: initialDistrict?.properties.bounds ?? cityBounds,
+          fitBoundsOptions: { padding: viewPadding(toolbar.current) },
           maxBounds: [[70.4, 50.5], [72.6, 51.9]], minZoom: 8.5, maxZoom: 16,
           dragRotate: false, pitchWithRotate: false, touchPitch: false,
           attributionControl: false, renderWorldCopies: false,
-          cooperativeGestures: true,
-          locale: {
-            'CooperativeGesturesHandler.WindowsHelpText': 'Ctrl + прокрутка для масштаба',
-            'CooperativeGesturesHandler.MacHelpText': '⌘ + прокрутка для масштаба',
-            'CooperativeGesturesHandler.MobileHelpText': 'Перемещайте карту двумя пальцами',
-          },
+          cooperativeGestures: false, scrollZoom: false,
         })
         mapRef.current = map
         map.touchZoomRotate.disableRotation()
@@ -131,12 +154,6 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
           const text = document.createElement('div')
           text.className = labelClass(id === selectedRef.current, case_district)
           text.textContent = case_district ? name : `${name} · вне кейса`
-          if (id === 'almaty') {
-            const note = document.createElement('span')
-            note.className = 'mt-0.5 block text-center text-[10px] font-normal'
-            note.textContent = 'Объединены для симуляции'
-            text.append(note)
-          }
           label.append(text)
           const marker = new maplibre.Marker({ element: label, anchor: 'center' }).setLngLat(label_point).addTo(map)
           labels.current.push({ id, enabled: case_district, marker, text })
@@ -169,6 +186,8 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
       cancelled = true
       clearTimeout(watchdog)
       observer?.disconnect()
+      for (const controller of pendingRequests.values()) controller.abort()
+      pendingRequests.clear()
       labels.current.forEach((label) => label.marker.remove())
       labels.current = []
       map?.remove()
@@ -178,77 +197,104 @@ export default function AstanaMap({ districtId, onDistrictChange, districts }: {
 
   useEffect(() => {
     const map = mapRef.current
-    if (!map || !ready) return
-    const controller = new AbortController()
-    const layerIds = ['context-areas', 'context-lines', 'context-points']
-    for (const id of layerIds) if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', 'none')
-    if (!layer) return
-    async function showLayer() {
-      try {
-        const data = cache.current.get(layer as MapLayerId) ?? await getMapLayer(layer as MapLayerId, controller.signal)
-        if (controller.signal.aborted || !map) return
-        cache.current.set(layer as MapLayerId, data)
-        if (map.getSource('context')) await (map.getSource('context') as GeoJSONSource).setData(data, true)
-        else {
-          map.addSource('context', { type: 'geojson', data })
-          map.addLayer({ id: 'context-areas', type: 'fill', source: 'context', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#2e8b57', 'fill-opacity': 0.38 } }, 'case-border')
-          map.addLayer({ id: 'context-lines', type: 'line', source: 'context', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#b45309', 'line-width': 2, 'line-opacity': 0.65 } }, 'case-border')
-          map.addLayer({ id: 'context-points', type: 'circle', source: 'context', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-color': '#b45309', 'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 2, 14, 5], 'circle-opacity': 0.8, 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1 } }, 'case-border')
+    if (!map || !ready || !map.getLayer('case-fill')) return
+    for (const overlay of overlays) {
+      const id = overlay.id
+      if (!selectedLayers.includes(id)) {
+        requests.current.get(id)?.abort()
+        requests.current.delete(id)
+        failedLayers.current.delete(id)
+        for (const layerId of contextLayerIds(id)) {
+          if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', 'none')
         }
-        if (controller.signal.aborted) return
-        for (const id of layerIds) map.setLayoutProperty(id, 'visibility', 'visible')
-        setLayerStatus('idle')
-      } catch {
-        if (!controller.signal.aborted) setLayerStatus('error')
+        continue
       }
+      const cached = cache.current.get(id)
+      if (cached) {
+        showContext(map, overlay, cached)
+        continue
+      }
+      if (requests.current.has(id) || failedLayers.current.has(id)) continue
+      const controller = new AbortController()
+      requests.current.set(id, controller)
+      setLayerStatus((current) => ({ ...current, [id]: { state: 'loading' } }))
+      // Каждый слой загружается независимо; устаревший ответ не может включить его снова.
+      void getMapLayer(id, controller.signal).then((data) => {
+        if (controller.signal.aborted || mapRef.current !== map) return
+        cache.current.set(id, data)
+        showContext(map, overlay, data)
+        setLayerStatus((current) => ({ ...current, [id]: { state: data.features.length ? 'ready' : 'empty' } }))
+      }).catch((error: unknown) => {
+        if (controller.signal.aborted || mapRef.current !== map) return
+        failedLayers.current.add(id)
+        setLayerStatus((current) => ({ ...current, [id]: {
+          state: 'error',
+          message: error instanceof ApiError ? error.message : 'Не удалось загрузить слой',
+          requestId: error instanceof ApiError ? error.requestId : undefined,
+        } }))
+      }).finally(() => {
+        if (requests.current.get(id) === controller) requests.current.delete(id)
+      })
     }
-    void showLayer()
-    return () => controller.abort()
-  }, [layer, ready, retry])
+  }, [selectedLayers, ready, retry, layerRetry])
+
+  function toggleLayer(id: MapLayerId) {
+    setSelectedLayers((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id])
+  }
 
   return (
-    <div className="overflow-hidden rounded-none border border-slate-200/80 bg-white ">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">Астана</span>
-        <div role="group" aria-label="Выбор района" className="flex flex-wrap gap-1">
-          {districts.map((district) => (
-            <button key={district.id} type="button" aria-pressed={district.id === districtId}
-              onClick={() => onDistrictChange(district.id)}
-              className={`min-h-9 rounded-none px-3 py-2 text-xs font-semibold transition-[background-color,color,box-shadow,transform] duration-200 ease-out active:scale-95 motion-reduce:transform-none motion-reduce:transition-none ${district.id === districtId ? 'bg-teal-800 text-white ' : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800'}`}>
-              {districtDisplayName(district.id, district.name)}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="relative isolate h-[440px] overflow-hidden bg-slate-100 sm:h-[520px] xl:h-[min(57vh,660px)] xl:min-h-[440px]">
+    <div className="overflow-hidden rounded-none border border-slate-200 bg-white">
+      <div className="relative isolate h-[520px] overflow-hidden bg-slate-100 sm:h-[600px] lg:h-[min(74vh,760px)] lg:min-h-[640px]">
         <div ref={container} className="h-full w-full" role="region" aria-label={`Карта Астаны. Выбран район ${districtDisplayName(districtId, districts.find((d) => d.id === districtId)?.name ?? '')}`} />
-        {!ready && !mapError && <div role="status" className="pointer-events-none absolute inset-x-0 top-5 flex justify-center"><span className="rounded-none bg-white px-4 py-2 text-xs text-slate-600 motion-safe:animate-pulse">Открываем карту…</span></div>}
-        {mapError && <div className="absolute inset-0 grid place-content-center gap-3 p-8 text-center">
-          <p className="text-sm text-slate-600">Карта недоступна в этом браузере.<br />Выберите район кнопками сверху.</p>
-          <button type="button" onClick={() => { setMapError(false); setTilesError(false); setReady(false); setLayer(''); setRetry((n) => n + 1) }} className="rounded-none bg-white px-4 py-2 text-sm text-teal-800 ">Повторить</button>
+        <div ref={toolbar} className="pointer-events-none absolute inset-x-3 top-3 flex flex-col items-start gap-2">
+          <label className="pointer-events-auto flex max-w-full items-center gap-2 border border-slate-300 bg-white py-1 pl-3 pr-2">
+            <span className="text-[11px] font-medium text-slate-500">Район</span>
+            <select aria-label="Район" value={districtId} onChange={(event) => onDistrictChange(event.target.value)}
+              className="min-h-8 min-w-0 max-w-full rounded-none bg-white pr-4 text-xs font-semibold text-slate-800 outline-offset-4">
+              {districts.map((district) => <option key={district.id} value={district.id}>{districtDisplayName(district.id, district.name)}</option>)}
+            </select>
+          </label>
+          <div role="group" aria-label="Слои объектов" className="pointer-events-auto flex flex-wrap gap-1.5">
+            {overlays.map((overlay) => {
+              const active = selectedLayers.includes(overlay.id)
+              const status = layerStatus[overlay.id]
+              return <button key={overlay.id} type="button" aria-pressed={active} aria-busy={active && status?.state === 'loading'}
+                disabled={!ready || mapError} onClick={() => toggleLayer(overlay.id)}
+                className={`inline-flex min-h-9 items-center gap-1.5 rounded-none border px-2.5 py-1.5 text-[11px] font-medium transition-colors duration-150 disabled:opacity-50 motion-reduce:transition-none ${active ? overlay.activeClass : 'border-slate-300 bg-white text-slate-700 hover:border-slate-500'}`}>
+                <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${overlay.dotClass} ${active && status?.state === 'loading' ? 'motion-safe:animate-pulse' : ''}`} />
+                {overlay.name}
+                <span aria-hidden="true" className="w-2 text-[10px]">{active ? status?.state === 'loading' ? '…' : status?.state === 'error' ? '!' : '✓' : ''}</span>
+              </button>
+            })}
+          </div>
+          <div role="status" className="pointer-events-auto empty:hidden">
+            {overlays.filter((overlay) => selectedLayers.includes(overlay.id)).map((overlay) => {
+              const status = layerStatus[overlay.id]
+              if (status?.state !== 'error' && status?.state !== 'empty') return null
+              return <p key={overlay.id} className="mb-1 border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-600">
+                {overlay.name}: {status.state === 'empty' ? 'нет объектов в данных' : status.message}
+                {status.requestId && <span className="ml-1">#{status.requestId}</span>}
+                {status.state === 'error' && <button type="button" aria-label={`Повторить загрузку: ${overlay.name}`} onClick={() => { failedLayers.current.delete(overlay.id); setLayerRetry((value) => value + 1) }} className="ml-2 font-medium text-slate-900 underline underline-offset-2">Повторить</button>}
+              </p>
+            })}
+          </div>
+        </div>
+        {!ready && !mapError && <div role="status" className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="border border-slate-200 bg-white px-4 py-2 text-xs text-slate-600 motion-safe:animate-pulse">Открываем карту…</span></div>}
+        {mapError && <div className="absolute inset-x-0 bottom-0 top-48 grid place-content-center gap-3 p-8 text-center">
+          <p className="text-sm text-slate-600">Карта недоступна в этом браузере.</p>
+          <button type="button" onClick={() => { setMapError(false); setTilesError(false); setReady(false); setRetry((n) => n + 1) }} className="rounded-none border border-slate-300 bg-white px-4 py-2 text-sm text-teal-800">Повторить</button>
         </div>}
         {ready && !mapError && <>
-          <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-none bg-white p-1.5 ">
-            <button type="button" aria-label="Приблизить карту" onClick={() => mapRef.current?.zoomIn({ duration: reducedMotion() ? 0 : 250 })} className="h-9 w-9 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">+</button>
-            <button type="button" aria-label="Отдалить карту" onClick={() => mapRef.current?.zoomOut({ duration: reducedMotion() ? 0 : 250 })} className="h-9 w-9 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">−</button>
+          <div className="absolute bottom-3 right-3 flex flex-col divide-y divide-slate-200 border border-slate-300 bg-white">
+            <button type="button" aria-label="Приблизить карту" onClick={() => mapRef.current?.zoomIn({ duration: reducedMotion() ? 0 : 250 })} className="h-10 w-10 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">+</button>
+            <button type="button" aria-label="Отдалить карту" onClick={() => mapRef.current?.zoomOut({ duration: reducedMotion() ? 0 : 250 })} className="h-10 w-10 rounded-none text-xl text-slate-600 transition-colors hover:bg-slate-100 motion-reduce:transition-none">−</button>
           </div>
-          <button type="button" onClick={() => { mapRef.current?.stop(); mapRef.current?.fitBounds(cityBounds, { padding: 28, duration: reducedMotion() ? 0 : 650 }) }} className="absolute bottom-4 left-4 rounded-none bg-white px-3 py-2 text-xs font-medium text-slate-600 transition-colors hover:bg-white motion-reduce:transition-none">Весь город</button>
-          {tilesError && <p role="status" className="absolute bottom-4 right-4 max-w-48 rounded-none bg-white px-3 py-2 text-xs text-slate-500">Часть подложки недоступна. Районы можно выбирать.</p>}
+          <button type="button" onClick={() => { mapRef.current?.stop(); mapRef.current?.fitBounds(cityBounds, { padding: viewPadding(toolbar.current), duration: reducedMotion() ? 0 : 650 }) }} className="absolute bottom-3 left-3 min-h-10 rounded-none border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-100 motion-reduce:transition-none">Весь город</button>
+          {tilesError && <p role="status" className="absolute bottom-16 left-3 max-w-48 border border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">Часть подложки недоступна.</p>}
         </>}
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
-        <label className="flex items-center gap-2 text-xs text-slate-500">Объекты
-          <select aria-label="Объекты на карте" value={layer} disabled={!ready || mapError}
-            onChange={(event) => { setLayer(event.target.value as MapLayerId | ''); setLayerStatus(event.target.value ? 'loading' : 'idle') }}
-            className="min-h-9 max-w-48 rounded-none border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-700 outline-offset-4 disabled:opacity-40">
-            <option value="">Не показывать</option>
-            {overlayNames.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>
-        </label>
-        <span role="status" className="text-xs text-slate-500">{layerStatus === 'loading' ? 'Загружаем объекты…' : layerStatus === 'error' ? 'Не удалось загрузить. Выберите слой ещё раз.' : ''}</span>
-        <span className="text-[10px] text-slate-400">
-          © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenStreetMap</a> · <a href="https://openfreemap.org/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenMapTiles</a>
-        </span>
+      <div className="border-t border-slate-100 px-3 py-2 text-right text-[10px] text-slate-400">
+        © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenStreetMap</a> · <a href="https://openfreemap.org/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noreferrer" className="underline hover:text-slate-600">OpenMapTiles</a>
       </div>
     </div>
   )
