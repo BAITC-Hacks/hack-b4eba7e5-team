@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AstanaMap from '../components/AstanaMap'
 import GuidedTour from '../components/GuidedTour'
+import ResizableColumns from '../components/ResizableColumns'
 import { districtDisplayName } from '../lib/districts'
 import ScoreGauge from '../components/ScoreGauge'
 import DistrictPopup from '../components/DistrictPopup'
@@ -234,14 +235,15 @@ export default function SimulatorPage() {
       </section>
       <p aria-live="polite" role="status" className="sr-only">{feedback}</p>
 
-      <div className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <section data-tour="measures" aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-none border border-stone-200/80 bg-white lg:col-start-2 lg:row-start-1">
+      <ResizableColumns>
+        <section id="measures-panel" data-tour="measures" aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-none border border-stone-200/80 bg-white md:col-start-3 md:row-start-1">
           <div className="border-b border-stone-100 p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 id="catalog-title" className="text-sm font-semibold text-stone-900">Мероприятия</h3>
               <span className="rounded-none bg-stone-100 px-2 py-1 text-[11px] tabular-nums text-stone-500">{dataset.measures.length} на выбор</span>
             </div>
             <p className="mt-2 text-xs leading-5 text-stone-500">До {dataset.max_per_direction} мер из одного направления.</p>
+            <p className="mt-1 hidden text-[10px] leading-4 text-stone-400 md:block">Потяните границу слева, чтобы изменить ширину.</p>
             <p className="mt-3 flex items-center gap-2 rounded-none bg-teal-50 px-2.5 py-2 text-xs text-teal-800">
               <span aria-hidden="true" className="size-1.5 shrink-0 rounded-none bg-teal-600" />
               Новые районные меры → {districtName(district.id)}
@@ -299,7 +301,7 @@ export default function SimulatorPage() {
           </div>
         </section>
 
-        <section aria-label="Карта и состояние района" className="order-1 min-w-0 space-y-4 md:col-span-2 lg:col-span-1 lg:row-span-2 lg:col-start-1 lg:row-start-1">
+        <section aria-label="Карта и состояние района" className="order-1 min-w-0 space-y-4 md:row-span-2 md:col-start-1 md:row-start-1">
           <div data-tour="map">
             <AstanaMap districtId={district.id} onDistrictChange={setDistrictId} districts={dataset.districts}
               renderSummary={(onClose) => <DistrictPopup district={after ?? before} dataset={dataset} hasResult={Boolean(after)} onClose={onClose} onFullFormat={showFullStatistics} />} />
@@ -340,7 +342,7 @@ export default function SimulatorPage() {
           </div>
         </section>
 
-        <section aria-labelledby="plan-title" className="order-3 min-w-0 space-y-4 lg:col-start-2 lg:row-start-2">
+        <section aria-labelledby="plan-title" className="order-3 min-w-0 space-y-4 md:col-start-3 md:row-start-2">
           <div data-tour="plan" className="rounded-none border border-stone-200/80 bg-white p-4 ">
             <div className="flex items-center justify-between gap-3">
               <h3 id="plan-title" className="text-sm font-semibold text-stone-900">Ваш план</h3>
@@ -469,7 +471,7 @@ export default function SimulatorPage() {
             </div>
           </div>}
         </section>
-      </div>
+      </ResizableColumns>
       {tourOpen && <>
         <div aria-hidden="true" className="h-[352px]" />
         <GuidedTour onClose={() => setTourOpen(false)} />
