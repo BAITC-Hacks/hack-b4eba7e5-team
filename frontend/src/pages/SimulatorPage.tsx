@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AstanaMap from '../components/AstanaMap'
+import GuidedTour from '../components/GuidedTour'
 import { districtDisplayName } from '../lib/districts'
 import ScoreGauge from '../components/ScoreGauge'
 import {
@@ -36,6 +37,7 @@ export default function SimulatorPage() {
   const [analysis, setAnalysis] = useState('')
   const [error, setError] = useState<ApiError | null>(null)
   const [feedback, setFeedback] = useState('')
+  const [tourOpen, setTourOpen] = useState(false)
   const revision = useRef(0)
   const calculationRequest = useRef(0)
   const analysisAbort = useRef<AbortController | null>(null)
@@ -190,6 +192,9 @@ export default function SimulatorPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-1 text-xs">
+          <button onClick={() => setTourOpen(true)} className={`min-h-10 rounded-none border border-stone-200 bg-white px-3 font-medium text-stone-700 hover:border-teal-700 hover:text-teal-800 ${focus} ${motion}`}>
+            Запустить подсказки
+          </button>
           <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-none px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40 ${focus} ${motion}`}>
             Сбросить
           </button>
@@ -198,7 +203,7 @@ export default function SimulatorPage() {
       <p aria-live="polite" role="status" className="sr-only">{feedback}</p>
 
       <div className="grid items-start gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <section aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-none border border-stone-200/80 bg-white lg:col-start-2 lg:row-start-1">
+        <section data-tour="measures" aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-none border border-stone-200/80 bg-white lg:col-start-2 lg:row-start-1">
           <div className="border-b border-stone-100 p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 id="catalog-title" className="text-sm font-semibold text-stone-900">Мероприятия</h3>
@@ -261,8 +266,8 @@ export default function SimulatorPage() {
         </section>
 
         <section aria-label="Карта и состояние района" className="order-1 min-w-0 space-y-4 md:col-span-2 lg:col-span-1 lg:row-span-2 lg:col-start-1 lg:row-start-1">
-          <AstanaMap districtId={district.id} onDistrictChange={setDistrictId} districts={dataset.districts} />
-          <div className="rounded-none border border-stone-200/80 bg-white p-4 sm:p-5">
+          <div data-tour="map"><AstanaMap districtId={district.id} onDistrictChange={setDistrictId} districts={dataset.districts} /></div>
+          <div data-tour="district" className="rounded-none border border-stone-200/80 bg-white p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400">Выбранный район</p>
@@ -294,7 +299,7 @@ export default function SimulatorPage() {
         </section>
 
         <section aria-labelledby="plan-title" className="order-3 min-w-0 space-y-4 lg:col-start-2 lg:row-start-2">
-          <div className="rounded-none border border-stone-200/80 bg-white p-4 ">
+          <div data-tour="plan" className="rounded-none border border-stone-200/80 bg-white p-4 ">
             <div className="flex items-center justify-between gap-3">
               <h3 id="plan-title" className="text-sm font-semibold text-stone-900">Ваш план</h3>
               <span aria-live="polite" className={`rounded-none px-2.5 py-1 text-[11px] font-medium tabular-nums ${isComplete ? 'bg-teal-100 text-teal-800' : 'bg-stone-100 text-stone-500'}`}>{decisions.length} из {dataset.decisions_required}</span>
@@ -332,7 +337,7 @@ export default function SimulatorPage() {
                 </li>
               ))}
             </ol>
-            <div className="mt-4 border-t border-stone-100 pt-4">
+            <div data-tour="calculate" className="mt-4 border-t border-stone-100 pt-4">
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-xs text-stone-500">Бюджет</p>
                 <p className={`text-xl font-semibold tabular-nums ${cost > dataset.budget ? 'text-red-700' : 'text-stone-900'}`}>{fmt(cost)} <span className="text-xs font-normal text-stone-400">/ {dataset.budget} ед.</span></p>
@@ -403,6 +408,7 @@ export default function SimulatorPage() {
           </div>}
         </section>
       </div>
+      {tourOpen && <GuidedTour onClose={() => setTourOpen(false)} />}
     </main>
   )
 }
