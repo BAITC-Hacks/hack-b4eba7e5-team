@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import AstanaMap from '../components/AstanaMap'
+import { districtDisplayName } from '../lib/districts'
 import {
   ApiError, analyzeScenario, evaluateScenario, getSimConfig,
   type Decision, type Evaluation, type Indicator, type Measure, type SimConfig,
@@ -14,7 +15,7 @@ const enter = 'motion-safe:transition-[opacity,transform] motion-safe:duration-3
 
 function ErrorMessage({ error }: { error: ApiError }) {
   return (
-    <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+    <div role="alert" className="rounded-none border border-red-200 bg-red-50 p-3 text-sm text-red-800">
       {error.message}
       {error.requestId && <span className="ml-2 break-all text-red-600">#{error.requestId}</span>}
     </div>
@@ -114,11 +115,11 @@ export default function SimulatorPage() {
       <main className="mx-auto max-w-2xl space-y-4 px-4 py-16 sm:px-6">
         {loadError ? <>
           <ErrorMessage error={loadError} />
-          <button className={`rounded-xl bg-teal-800 px-4 py-3 text-sm font-medium text-white ${focus} ${motion}`} onClick={() => { setLoadError(null); setReload((n) => n + 1) }}>
+          <button className={`rounded-none bg-teal-800 px-4 py-3 text-sm font-medium text-white ${focus} ${motion}`} onClick={() => { setLoadError(null); setReload((n) => n + 1) }}>
             Попробовать ещё раз
           </button>
-        </> : <div role="status" className="rounded-2xl border border-stone-200 bg-white p-6 text-sm text-stone-500">
-          <span className="mb-4 block h-2 w-24 rounded-full bg-teal-100 motion-safe:animate-pulse" />
+        </> : <div role="status" className="rounded-none border border-stone-200 bg-white p-6 text-sm text-stone-500">
+          <span className="mb-4 block h-2 w-24 rounded-none bg-teal-100 motion-safe:animate-pulse" />
           Загружаем районы и мероприятия…
         </div>}
       </main>
@@ -131,13 +132,13 @@ export default function SimulatorPage() {
   const district = dataset.districts.find((d) => d.id === districtId) ?? dataset.districts[0]
   const before = baseline.districts.find((d) => d.id === district?.id)
   const after = result?.districts.find((d) => d.id === district?.id)
-  const districtName = (id: string) => dataset.districts.find((d) => d.id === id)?.name ?? id
+  const districtName = (id: string) => districtDisplayName(id, dataset.districts.find((d) => d.id === id)?.name ?? id)
   const indicatorName = (code: string) => dataset.indicators.find((i) => i.code === code)?.name ?? code
   const measureName = (id: string) => dataset.measures.find((m) => m.id === id)?.name ?? id
   const directionCount = (id: string) => decisions.filter((decision) => dataset.measures.find((m) => m.id === decision.measure_id)?.direction === id).length
 
   if (!district || !before || dataset.measures.length === 0) {
-    return <main className="mx-auto max-w-2xl p-6"><p className="rounded-2xl border border-stone-200 bg-white p-6 text-sm text-stone-600">Пока нет данных для симуляции.</p></main>
+    return <main className="mx-auto max-w-2xl p-6"><p className="rounded-none border border-stone-200 bg-white p-6 text-sm text-stone-600">Пока нет данных для симуляции.</p></main>
   }
 
   function disabledReason(measure: Measure): string | null {
@@ -193,10 +194,10 @@ export default function SimulatorPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-1 text-xs">
-          <button onClick={loadExample} className={`min-h-10 rounded-lg px-3 font-medium text-stone-600 hover:bg-white hover:text-teal-800 ${focus} ${motion}`}>
+          <button onClick={loadExample} className={`min-h-10 rounded-none px-3 font-medium text-stone-600 hover:bg-white hover:text-teal-800 ${focus} ${motion}`}>
             Попробовать пример
           </button>
-          <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-lg px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40 ${focus} ${motion}`}>
+          <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-none px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40 ${focus} ${motion}`}>
             Сбросить
           </button>
         </div>
@@ -204,16 +205,16 @@ export default function SimulatorPage() {
       <p aria-live="polite" role="status" className="sr-only">{feedback}</p>
 
       <div className="grid items-start gap-4 lg:grid-cols-2 xl:grid-cols-[264px_minmax(0,1fr)_292px] 2xl:grid-cols-[280px_minmax(0,1fr)_308px]">
-        <section aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-2xl border border-stone-200/80 bg-white shadow-sm shadow-stone-200/30 xl:order-1">
+        <section aria-labelledby="catalog-title" className="order-2 min-w-0 overflow-hidden rounded-none border border-stone-200/80 bg-white xl:order-1">
           <div className="border-b border-stone-100 p-4">
             <div className="flex items-center justify-between gap-2">
               <h3 id="catalog-title" className="text-sm font-semibold text-stone-900">Мероприятия</h3>
-              <span className="rounded-md bg-stone-100 px-2 py-1 text-[11px] tabular-nums text-stone-500">{dataset.measures.length} на выбор</span>
+              <span className="rounded-none bg-stone-100 px-2 py-1 text-[11px] tabular-nums text-stone-500">{dataset.measures.length} на выбор</span>
             </div>
             <p className="mt-2 text-xs leading-5 text-stone-500">До {dataset.max_per_direction} мер из одного направления.</p>
-            <p className="mt-3 flex items-center gap-2 rounded-lg bg-teal-50 px-2.5 py-2 text-xs text-teal-800">
-              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-teal-600" />
-              Новые районные меры → {district.name}
+            <p className="mt-3 flex items-center gap-2 rounded-none bg-teal-50 px-2.5 py-2 text-xs text-teal-800">
+              <span aria-hidden="true" className="size-1.5 shrink-0 rounded-none bg-teal-600" />
+              Новые районные меры → {districtName(district.id)}
             </p>
           </div>
           <div className="divide-y divide-stone-100">
@@ -228,7 +229,7 @@ export default function SimulatorPage() {
                     className={`flex min-h-14 w-full items-center gap-2 px-4 text-left text-sm hover:bg-stone-50 ${focus} ${motion}`}
                   >
                     <span className={`flex-1 font-medium ${isOpen ? 'text-teal-800' : 'text-stone-700'}`}>{direction.name}</span>
-                    <span className={`rounded-md px-1.5 py-0.5 text-[11px] tabular-nums ${count ? 'bg-teal-50 text-teal-700' : 'text-stone-400'}`}>{count}/{dataset.max_per_direction}</span>
+                    <span className={`rounded-none px-1.5 py-0.5 text-[11px] tabular-nums ${count ? 'bg-teal-50 text-teal-700' : 'text-stone-400'}`}>{count}/{dataset.max_per_direction}</span>
                     <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className={`size-4 text-stone-400 motion-safe:transition-transform motion-safe:duration-200 ${isOpen ? 'rotate-180' : ''}`}><path d="m4 6 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
                   </button>
                   <div id={`direction-${direction.id}`} inert={!isOpen} className={`grid motion-safe:transition-[grid-template-rows,opacity] motion-safe:duration-300 ${isOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
@@ -238,7 +239,7 @@ export default function SimulatorPage() {
                           const selected = decisions.find((decision) => decision.measure_id === measure.id)
                           const reason = selected ? null : disabledReason(measure)
                           return (
-                            <article key={measure.id} className={`rounded-xl border p-3 motion-safe:transition-colors motion-safe:duration-200 ${selected ? 'border-teal-300 bg-teal-50/70' : 'border-stone-200/80 bg-stone-50/50'}`}>
+                            <article key={measure.id} className={`rounded-none border p-3 motion-safe:transition-colors motion-safe:duration-200 ${selected ? 'border-teal-300 bg-teal-50' : 'border-stone-200/80 bg-stone-50'}`}>
                               <div className="flex items-start justify-between gap-2">
                                 <h4 className="text-xs font-medium leading-5 text-stone-800">{measure.name}</h4>
                                 <span className="shrink-0 text-sm font-semibold tabular-nums text-stone-800">{measure.cost}<span className="ml-0.5 text-[10px] font-normal text-stone-500">ед.</span></span>
@@ -248,7 +249,7 @@ export default function SimulatorPage() {
                                 aria-label={`${selected ? 'Убрать' : 'Добавить'}: ${measure.name}`}
                                 aria-describedby={reason ? `reason-${measure.id}` : undefined}
                                 aria-pressed={Boolean(selected)} disabled={Boolean(reason)} onClick={() => toggleMeasure(measure)}
-                                className={`mt-2 flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-2.5 text-left text-xs font-medium disabled:cursor-not-allowed ${selected ? 'bg-teal-100 text-teal-800 hover:bg-teal-200' : 'bg-white text-stone-700 shadow-xs hover:bg-teal-50 hover:text-teal-800 disabled:bg-stone-100 disabled:text-stone-400 disabled:shadow-none'} ${focus} ${motion}`}
+                                className={`mt-2 flex min-h-10 w-full items-center justify-between gap-2 rounded-none px-2.5 text-left text-xs font-medium disabled:cursor-not-allowed ${selected ? 'bg-teal-100 text-teal-800 hover:bg-teal-200' : 'bg-white text-stone-700 hover:bg-teal-50 hover:text-teal-800 disabled:bg-stone-100 disabled:text-stone-400 '} ${focus} ${motion}`}
                               >
                                 <span>{selected ? `В плане · ${selected.district_id ? districtName(selected.district_id) : 'Весь город'}` : 'Добавить в план'}</span>
                                 <span aria-hidden="true" className="text-lg font-normal leading-none">{selected ? '−' : '+'}</span>
@@ -268,11 +269,11 @@ export default function SimulatorPage() {
 
         <section aria-label="Карта и состояние района" className="order-1 min-w-0 space-y-4 lg:col-span-2 xl:order-2 xl:col-span-1">
           <AstanaMap districtId={district.id} onDistrictChange={setDistrictId} districts={dataset.districts} />
-          <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm shadow-stone-200/30 sm:p-5">
+          <div className="rounded-none border border-stone-200/80 bg-white p-4 sm:p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400">Выбранный район</p>
-                <h3 className="mt-1 text-lg font-semibold text-stone-900">{district.name}</h3>
+                <h3 className="mt-1 text-lg font-semibold text-stone-900">{districtName(district.id)}</h3>
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[10px] text-stone-500">Оценка района</p>
@@ -289,38 +290,41 @@ export default function SimulatorPage() {
             </div>
             <div key={district.id} className={enter}>{orderedIndicators.slice(0, 3).map(indicatorRow)}</div>
             <details className="group mt-1 border-t border-stone-100 text-xs">
-              <summary className={`cursor-pointer rounded-lg py-3 font-medium text-stone-500 hover:text-teal-700 ${focus}`}>Все показатели района</summary>
+              <summary className={`cursor-pointer rounded-none py-3 font-medium text-stone-500 hover:text-teal-700 ${focus}`}>Все показатели района</summary>
               <div>{orderedIndicators.slice(3).map(indicatorRow)}</div>
             </details>
-            <p className="mt-1 text-[10px] leading-4 text-stone-400">Данные районов условные, из задания. Порог критического значения — ниже {dataset.critical_threshold}.</p>
+            <p className="mt-1 text-[10px] leading-4 text-stone-400">
+              {district.id === 'almaty' ? 'Алматы и Сарайшык объединены на карте; расчёт по данным Алматы из ТЗ.' : 'Данные районов условные, из задания.'}
+              {' '}Порог критического значения — ниже {dataset.critical_threshold}.
+            </p>
           </div>
         </section>
 
         <section aria-labelledby="plan-title" className="order-3 min-w-0 space-y-4">
-          <div className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm shadow-stone-200/30">
+          <div className="rounded-none border border-stone-200/80 bg-white p-4 ">
             <div className="flex items-center justify-between gap-3">
               <h3 id="plan-title" className="text-sm font-semibold text-stone-900">Ваш план</h3>
-              <span aria-live="polite" className={`rounded-full px-2.5 py-1 text-[11px] font-medium tabular-nums ${isComplete ? 'bg-teal-100 text-teal-800' : 'bg-stone-100 text-stone-500'}`}>{decisions.length} из {dataset.decisions_required}</span>
+              <span aria-live="polite" className={`rounded-none px-2.5 py-1 text-[11px] font-medium tabular-nums ${isComplete ? 'bg-teal-100 text-teal-800' : 'bg-stone-100 text-stone-500'}`}>{decisions.length} из {dataset.decisions_required}</span>
             </div>
             <p className="mt-2 text-xs leading-5 text-stone-500">{decisions.length === 0 ? 'Добавляйте меры из каталога. Каждая — один раз.' : 'Район каждой меры можно изменить здесь.'}</p>
             <ol className="mt-4 space-y-2">
               {decisions.map((decision, index) => {
                 const measure = dataset.measures.find((item) => item.id === decision.measure_id)!
                 return (
-                  <li key={decision.measure_id} className={`rounded-xl border border-stone-200/80 bg-stone-50/60 p-2.5 ${enter}`}>
+                  <li key={decision.measure_id} className={`rounded-none border border-stone-200/80 bg-stone-50 p-2.5 ${enter}`}>
                     <div className="flex items-start gap-2">
-                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-white text-[10px] tabular-nums text-stone-400">{index + 1}</span>
+                      <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-none bg-white text-[10px] tabular-nums text-stone-400">{index + 1}</span>
                       <p className="flex-1 text-xs font-medium leading-5 text-stone-700">{measure.name}</p>
-                      <button onClick={() => toggleMeasure(measure)} aria-label={`Убрать из плана: ${measure.name}`} className={`-mr-1 -mt-1 flex size-8 shrink-0 items-center justify-center rounded-lg text-lg font-normal text-stone-400 hover:bg-white hover:text-red-700 ${focus} ${motion}`}><span aria-hidden="true">×</span></button>
+                      <button onClick={() => toggleMeasure(measure)} aria-label={`Убрать из плана: ${measure.name}`} className={`-mr-1 -mt-1 flex size-8 shrink-0 items-center justify-center rounded-none text-lg font-normal text-stone-400 hover:bg-white hover:text-red-700 ${focus} ${motion}`}><span aria-hidden="true">×</span></button>
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2 pl-7">
                       {measure.scope === 'district' ? (
                         <select
                           aria-label={`Район: ${measure.name}`} value={decision.district_id ?? ''}
                           onChange={(event) => changePlan(decisions.map((item) => item.measure_id === measure.id ? { ...item, district_id: event.target.value } : item), `Район меры изменён: ${districtName(event.target.value)}.`)}
-                          className={`min-h-9 min-w-0 max-w-full flex-1 rounded-lg border border-stone-200 bg-white px-2 text-xs text-stone-600 ${focus} ${motion}`}
+                          className={`min-h-9 min-w-0 max-w-full flex-1 rounded-none border border-stone-200 bg-white px-2 text-xs text-stone-600 ${focus} ${motion}`}
                         >
-                          {dataset.districts.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          {dataset.districts.map((item) => <option key={item.id} value={item.id}>{districtName(item.id)}</option>)}
                         </select>
                       ) : <span className="py-2 text-[11px] text-stone-500">Весь город</span>}
                       <span className="shrink-0 text-[11px] tabular-nums text-stone-500">{measure.cost} ед.</span>
@@ -329,7 +333,7 @@ export default function SimulatorPage() {
                 )
               })}
               {Array.from({ length: Math.max(0, dataset.decisions_required - decisions.length) }, (_, index) => (
-                <li key={`empty-${index}`} className="flex min-h-11 items-center gap-2 rounded-xl border border-dashed border-stone-200 px-2.5 text-[11px] text-stone-400">
+                <li key={`empty-${index}`} className="flex min-h-11 items-center gap-2 rounded-none border border-dashed border-stone-200 px-2.5 text-[11px] text-stone-400">
                   <span className="flex size-5 items-center justify-center tabular-nums">{decisions.length + index + 1}</span>
                   <span>{index === 0 ? 'Добавьте мероприятие' : 'Свободное решение'}</span>
                 </li>
@@ -343,9 +347,9 @@ export default function SimulatorPage() {
               <p className={`mt-1 text-right text-[11px] ${cost > dataset.budget ? 'text-red-700' : 'text-stone-400'}`}>{cost > dataset.budget ? `Перерасход ${fmt(cost - dataset.budget)} ед.` : `Осталось ${fmt(dataset.budget - cost)} ед.`}</p>
               <button
                 onClick={() => void calculate()} disabled={calculating || !isComplete} aria-describedby="calculate-hint"
-                className={`mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-teal-800 px-3 text-sm font-semibold text-white shadow-sm shadow-teal-900/10 hover:bg-teal-900 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 disabled:shadow-none ${focus} ${motion}`}
+                className={`mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-none bg-teal-800 px-3 text-sm font-semibold text-white hover:bg-teal-900 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-500 ${focus} ${motion}`}
               >
-                {calculating && <span aria-hidden="true" className="size-3 rounded-full border-2 border-white/40 border-t-white motion-safe:animate-spin" />}
+                {calculating && <span aria-hidden="true" className="size-3 rounded-none border-2 border-white/40 border-t-white motion-safe:animate-spin" />}
                 {calculating ? 'Рассчитываем…' : 'Рассчитать результат'}
               </button>
               <p id="calculate-hint" className="mt-2 text-center text-[10px] leading-4 text-stone-400">{isComplete ? `Результат через ${dataset.horizon_quarters} кварталов` : `Для расчёта выберите ровно ${dataset.decisions_required} разных мер.`}</p>
@@ -354,21 +358,21 @@ export default function SimulatorPage() {
 
           {error && <ErrorMessage error={error} />}
           {evaluation && !evaluation.valid && (
-            <div role="alert" className={`rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900 ${enter}`}>
+            <div role="alert" className={`rounded-none border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900 ${enter}`}>
               <p className="font-semibold">Исправьте план, чтобы получить Score</p>
               <ul className="mt-2 list-disc space-y-1 pl-4">{evaluation.violations.map((violation, index) => <li key={`${violation.code}-${index}`}>{violation.message}</li>)}</ul>
             </div>
           )}
-          {!result && <div className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200/60 px-4 py-3">
+          {!result && <div className="flex items-center justify-between gap-3 rounded-none border border-stone-200/60 px-4 py-3">
             <div><p className="text-xs text-stone-500">Исходный Score города</p><p className="mt-1 text-[10px] text-stone-400">До вашего плана</p></div>
             <p className="text-xl font-semibold tabular-nums text-stone-600">{fmt(baseline.score)}</p>
           </div>}
-          {result && <div className={`overflow-hidden rounded-2xl border border-teal-200 bg-white shadow-sm shadow-teal-900/5 ${enter}`}>
+          {result && <div className={`overflow-hidden rounded-none border border-teal-200 bg-white ${enter}`}>
             <div aria-live="polite" className="bg-teal-50 p-4">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-teal-800">Итоговый Score города</p>
               <div className="mt-2 flex flex-wrap items-baseline gap-3">
                 <p className="text-4xl font-semibold tracking-tight tabular-nums text-teal-950">{fmt(result.score)}</p>
-                <p className="rounded-full bg-white/80 px-2 py-1 text-xs font-medium tabular-nums text-teal-800" title="Прирост вычислен из значений до округления">{signed(result.score - baseline.score)}</p>
+                <p className="rounded-none bg-white px-2 py-1 text-xs font-medium tabular-nums text-teal-800" title="Прирост вычислен из значений до округления">{signed(result.score - baseline.score)}</p>
               </div>
               <p className="mt-2 text-xs text-teal-700">Было {fmt(baseline.score)} · Через {dataset.horizon_quarters} кварталов</p>
             </div>
@@ -379,9 +383,9 @@ export default function SimulatorPage() {
                 <div className="flex justify-between gap-2"><dt className="text-stone-500">Критические показатели</dt><dd className="font-medium tabular-nums text-stone-800">{baseline.n_crit} → {result.n_crit}</dd></div>
               </dl>
               <details className="text-xs">
-                <summary className={`cursor-pointer rounded-lg py-1 font-medium text-stone-500 hover:text-teal-700 ${focus}`}>Из чего складывается результат</summary>
+                <summary className={`cursor-pointer rounded-none py-1 font-medium text-stone-500 hover:text-teal-700 ${focus}`}>Из чего складывается результат</summary>
                 <p className="mt-3 text-[11px] leading-5 text-stone-500">Score = 70% среднего + 30% оценки слабейшего района − число критических показателей.</p>
-                {result.synergies.length > 0 && <div className="mt-3 rounded-lg bg-teal-50 p-3 text-[11px] leading-5 text-teal-800">
+                {result.synergies.length > 0 && <div className="mt-3 rounded-none bg-teal-50 p-3 text-[11px] leading-5 text-teal-800">
                   <p className="font-semibold">Сработавшие синергии</p>
                   <ul className="mt-1 space-y-2">{result.synergies.map((synergy, index) => <li key={index}>{synergy.pair.join(' + ')} · {districtName(synergy.district_id)}: {indicatorName(synergy.indicator)} {signed(synergy.bonus)}</li>)}</ul>
                 </div>}
@@ -392,12 +396,12 @@ export default function SimulatorPage() {
               <div className="border-t border-stone-100 pt-4">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-xs font-semibold text-stone-800">Разбор плана</h4>
-                  <span className="rounded-md bg-stone-100 px-1.5 py-1 text-[10px] text-stone-500">{config.llm_mode === 'mock' ? 'Шаблон' : 'ИИ'}</span>
+                  <span className="rounded-none bg-stone-100 px-1.5 py-1 text-[10px] text-stone-500">{config.llm_mode === 'mock' ? 'Шаблон' : 'ИИ'}</span>
                 </div>
-                <button onClick={() => void analyze()} disabled={analyzing} className={`mt-3 min-h-11 w-full rounded-xl border border-teal-200 px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50 ${focus} ${motion}`}>
+                <button onClick={() => void analyze()} disabled={analyzing} className={`mt-3 min-h-11 w-full rounded-none border border-teal-200 px-3 py-2 text-xs font-semibold text-teal-800 hover:bg-teal-50 disabled:cursor-not-allowed disabled:opacity-50 ${focus} ${motion}`}>
                   {analyzing ? 'Готовим объяснение…' : analysis ? 'Объяснить ещё раз' : 'Объяснить результат'}
                 </button>
-                {analyzing && <button className={`mt-1 min-h-9 rounded-lg px-2 text-xs text-stone-500 underline underline-offset-4 ${focus}`} onClick={() => { analysisAbort.current?.abort(); setAnalyzing(false) }}>Остановить</button>}
+                {analyzing && <button className={`mt-1 min-h-9 rounded-none px-2 text-xs text-stone-500 underline underline-offset-4 ${focus}`} onClick={() => { analysisAbort.current?.abort(); setAnalyzing(false) }}>Остановить</button>}
                 {analysis && <div aria-live="polite" className={`mt-3 whitespace-pre-wrap text-xs leading-6 text-stone-600 ${enter}`}>{analysis}</div>}
                 {!analysis && !analyzing && <p className="mt-2 text-[10px] leading-4 text-stone-400">Сильные стороны плана и проблемы, которые ещё остались.</p>}
               </div>
