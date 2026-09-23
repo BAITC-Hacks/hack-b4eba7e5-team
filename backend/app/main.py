@@ -66,5 +66,6 @@ async def health():
 
 # --- роутеры фич: по файлу в app/routes/ -------------------------------------
 
-app.include_router(chat.router)
+if settings.app_env == "dev":
+    app.include_router(chat.router)
 app.include_router(sim.router)

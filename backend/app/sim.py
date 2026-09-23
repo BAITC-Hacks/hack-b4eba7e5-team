@@ -3,6 +3,7 @@
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from functools import lru_cache
+from math import factorial
 from pathlib import Path
 from types import MappingProxyType
 from typing import Annotated, Literal
@@ -151,6 +152,41 @@ class Evaluation(FrozenModel):
     valid: bool
     violations: tuple[Violation, ...] = Field(max_length=200)
     result: Scenario | None
+
+
+class Contribution(FrozenModel):
+    measure_id: Identifier
+    district_id: Identifier | None
+    score_delta: float = Field(allow_inf_nan=False)
+
+
+def contributions(decisions: Sequence[Decision]) -> tuple[Contribution, ...]:
+    """Точные вклады Шепли: синергии, минимум и штраф распределены между мерами."""
+    violations = validate(decisions)
+    if violations:
+        raise ValueError(" ".join(item.message for item in violations))
+    count = len(decisions)
+    scores = {
+        mask: _calculate(
+            [decision for i, decision in enumerate(decisions) if mask & (1 << i)], get_dataset()
+        ).score
+        for mask in range(1 << count)
+    }
+    return tuple(
+        Contribution(
+            measure_id=decision.measure_id,
+            district_id=decision.district_id,
+            score_delta=sum(
+                factorial(mask.bit_count())
+                * factorial(count - mask.bit_count() - 1)
+                / factorial(count)
+                * (scores[mask | (1 << i)] - scores[mask])
+                for mask in scores
+                if not mask & (1 << i)
+            ),
+        )
+        for i, decision in enumerate(decisions)
+    )
 
 
 class SimulationConfig(FrozenModel):
