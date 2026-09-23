@@ -54,10 +54,10 @@ export default function ResizableColumns({ children }: { children: ReactNode }) 
 
   return (
     <div ref={container} data-testid="resizable-columns"
-      className={`grid items-start gap-4 md:gap-x-0 ${panelClasses[(width - MIN_CATALOG_WIDTH) / PANEL_STEP]} ${dragging ? 'cursor-col-resize select-none [&_*]:cursor-col-resize' : ''}`}>
+      className={`grid min-h-0 flex-1 gap-4 md:grid-rows-[minmax(0,1fr)] md:gap-x-0 ${panelClasses[(width - MIN_CATALOG_WIDTH) / PANEL_STEP]} ${dragging ? 'cursor-col-resize select-none [&_*]:cursor-col-resize' : ''}`}>
       {children}
       <div ref={separator} role="separator" tabIndex={0} aria-label="Ширина каталога мероприятий" aria-orientation="vertical"
-        aria-controls="measures-panel" aria-valuemin={MIN_CATALOG_WIDTH} aria-valuemax={limit} aria-valuenow={width} aria-valuetext={`${width} пикселей`}
+        aria-controls="decisions-panel" aria-valuemin={MIN_CATALOG_WIDTH} aria-valuemax={limit} aria-valuenow={width} aria-valuetext={`${width} пикселей`}
         aria-describedby="panel-resize-hint" title="Потяните влево или вправо. Двойной щелчок — исходная ширина."
         onPointerDown={(event) => {
           if (event.button !== 0 || !event.isPrimary || drag.current) return
@@ -69,9 +69,9 @@ export default function ResizableColumns({ children }: { children: ReactNode }) 
         }}
         onPointerMove={move} onPointerUp={(event) => move(event, true)} onPointerCancel={() => finish(true)} onLostPointerCapture={() => finish()}
         onKeyDown={onKeyDown} onDoubleClick={() => setWidth(catalogWidth(DEFAULT_CATALOG_WIDTH, limit))}
-        className={`group relative col-start-2 row-span-2 row-start-1 hidden h-full min-h-64 touch-none cursor-col-resize justify-center outline-none md:flex ${dragging ? 'bg-teal-100' : 'hover:bg-teal-50 focus-visible:bg-teal-50'}`}>
+        className={`group relative col-start-2 row-start-1 hidden h-full min-h-0 touch-none cursor-col-resize justify-center outline-none md:flex ${dragging ? 'bg-teal-100' : 'hover:bg-teal-50 focus-visible:bg-teal-50'}`}>
         <span aria-hidden="true" className={`absolute inset-y-0 w-px ${dragging ? 'bg-teal-600' : 'bg-stone-200 group-hover:bg-teal-500 group-focus-visible:bg-teal-600'}`} />
-        <span aria-hidden="true" className={`sticky top-32 mt-24 flex h-14 w-3.5 shrink-0 items-center justify-center rounded-full border ${dragging ? 'border-teal-600 bg-teal-100' : 'border-stone-300 bg-white group-hover:border-teal-500 group-focus-visible:border-teal-600'}`}>
+        <span aria-hidden="true" className={`absolute top-1/2 flex h-14 w-3.5 -translate-y-1/2 items-center justify-center rounded-full border ${dragging ? 'border-teal-600 bg-teal-100' : 'border-stone-300 bg-white group-hover:border-teal-500 group-focus-visible:border-teal-600'}`}>
           <span className="h-5 w-1 border-x border-teal-700" />
         </span>
         <span id="panel-resize-hint" className="sr-only">Тяните влево, чтобы расширить каталог, вправо — карту. Стрелки меняют ширину, Home и End — пределы, Enter — сброс, Escape — отмена перетягивания.</span>
