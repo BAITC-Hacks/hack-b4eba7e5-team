@@ -1,8 +1,10 @@
-"""Server-Sent Events: один формат для всех стримов. Во фронте его читает streamSSE() из lib/api.ts."""
+"""Общий SSE: статус, текст/результат, heartbeat, явное завершение или ошибка."""
 
+import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator
+from contextlib import suppress
 
 from fastapi.responses import StreamingResponse
 
@@ -16,23 +18,47 @@ def event(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
-def stream_text(chunks: AsyncIterator[str]) -> StreamingResponse:
-    """Поток текста → data: {"delta": "..."} … data: {"done": true}; ошибка → data: {"error", "request_id"}."""
+def stream_events(source: AsyncIterator[dict]) -> StreamingResponse:
     rid = request_id_var.get()
 
     async def events():
+        pending = None
         try:
-            async for delta in chunks:
-                yield event({"delta": delta})
+            while True:
+                pending = asyncio.create_task(anext(source))
+                while not (await asyncio.wait({pending}, timeout=10))[0]:
+                    yield event({"ping": True})
+                try:
+                    item = pending.result()
+                except StopAsyncIteration:
+                    break
+                yield event(item)
             yield event({"done": True})
-        except LLMError as e:
-            yield event({"error": e.user_message, "request_id": rid})
+        except LLMError as exc:
+            yield event({"error": exc.user_message, "request_id": rid})
         except Exception:
             log.exception("stream_failed")
             yield event({"error": "Внутренняя ошибка сервера", "request_id": rid})
+        finally:
+            if pending is not None:
+                pending.cancel()
+                with suppress(asyncio.CancelledError, Exception):
+                    await pending
+            await source.aclose()
 
     return StreamingResponse(
         events(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def stream_text(chunks: AsyncIterator[str]) -> StreamingResponse:
+    async def events():
+        try:
+            async for delta in chunks:
+                yield {"delta": delta}
+        finally:
+            await chunks.aclose()
+
+    return stream_events(events())

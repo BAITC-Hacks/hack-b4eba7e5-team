@@ -262,17 +262,22 @@ async def stream(messages: list[Message], *, model: str | None = None, **kwargs)
     usage: dict = {}
     finish_reason = None
     try:
-        async for chunk in resp:
-            if chunk.usage:
-                usage = _usage_fields(chunk)
-            if chunk.choices:
-                finish_reason = chunk.choices[0].finish_reason or finish_reason
-                if chunk.choices[0].delta.content:
-                    parts.append(chunk.choices[0].delta.content)
-                    yield parts[-1]
-    except openai.OpenAIError as e:
+        async with asyncio.timeout(s.llm_timeout_s):
+            async for chunk in resp:
+                if chunk.usage:
+                    usage = _usage_fields(chunk)
+                if chunk.choices:
+                    finish_reason = chunk.choices[0].finish_reason or finish_reason
+                    if chunk.choices[0].delta.content:
+                        parts.append(chunk.choices[0].delta.content)
+                        yield parts[-1]
+    except (openai.OpenAIError, TimeoutError) as e:
         _log_error(used, e)
         raise _translate(e) from e
+    finally:
+        await resp.close()
+    if finish_reason != "stop":
+        raise LLMError("Ответ ИИ не завершён. Попробуйте ещё раз", 502)
     text = "".join(parts)
     if not text.strip():
         raise _empty_answer(used, finish_reason)

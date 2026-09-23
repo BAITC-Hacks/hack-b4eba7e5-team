@@ -2,6 +2,7 @@
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
     llm_mock: bool = False
     # Кеш ответов в SQLite (DATA_DIR): одинаковый запрос → тот же ответ мгновенно, без вызова модели.
     llm_cache: bool = False
+    ai_requests_per_minute: int = Field(default=10, ge=1, le=120)
 
     @property
     def mock_mode(self) -> bool:
