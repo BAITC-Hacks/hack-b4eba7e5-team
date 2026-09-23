@@ -86,11 +86,6 @@ export default function SimulatorPage() {
     }
   }
 
-  function loadExample() {
-    if (!config) return
-    changePlan(config.example, 'Пять мероприятий из примера добавлены в план.')
-  }
-
   async function analyze() {
     if (!evaluation?.valid || !evaluation.result) return
     analysisAbort.current?.abort()
@@ -195,9 +190,6 @@ export default function SimulatorPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-1 text-xs">
-          <button onClick={loadExample} className={`min-h-10 rounded-none px-3 font-medium text-stone-600 hover:bg-white hover:text-teal-800 ${focus} ${motion}`}>
-            Попробовать пример
-          </button>
           <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-none px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40 ${focus} ${motion}`}>
             Сбросить
           </button>
