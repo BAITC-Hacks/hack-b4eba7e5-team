@@ -225,8 +225,8 @@ export default function SimulatorPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-1 text-xs">
-          <button onClick={() => setTourOpen(true)} className={`min-h-10 rounded-none border border-stone-200 bg-white px-3 font-medium text-stone-700 hover:border-teal-700 hover:text-teal-800 ${focus} ${motion}`}>
-            Запустить подсказки
+          <button type="button" aria-label="Запустить подсказки" title="Подсказки" onClick={() => setTourOpen(true)} className={`inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-lg font-semibold leading-none text-stone-700 hover:border-teal-700 hover:text-teal-800 ${focus} ${motion}`}>
+            ?
           </button>
           <button onClick={() => changePlan([], 'План очищен.')} disabled={decisions.length === 0} className={`min-h-10 rounded-none px-3 text-stone-500 hover:bg-white hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-40 ${focus} ${motion}`}>
             Сбросить
