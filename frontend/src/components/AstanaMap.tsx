@@ -7,6 +7,7 @@ import { ApiError, getMapLayer, type District, type MapLayerId } from '../lib/ap
 import { districtDisplayName } from '../lib/districts'
 import districtJson from '../data/districts.json'
 import basemapJson from '../data/basemap.json'
+import DistrictSelect from './DistrictSelect'
 
 type MapDistrict = {
   id: string; name: string; case_district: boolean; osm_id: number
@@ -76,7 +77,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MapInstance | null>(null)
   const toolbar = useRef<HTMLDivElement>(null)
-  const districtSelect = useRef<HTMLSelectElement>(null)
+  const districtSelect = useRef<HTMLButtonElement>(null)
   const popupRef = useRef<Popup | null>(null)
   const [popupHost] = useState(() => document.createElement('div'))
   const [popupDistrictId, setPopupDistrictId] = useState<string | null>(null)
@@ -110,7 +111,7 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
     if (!popupDistrictId) return
     const onKeyDown = (event: KeyboardEvent) => {
       // Escape в модальных подсказках не должен закрывать карточку за ними.
-      if (event.target instanceof Element && event.target.closest('dialog[open]')) return
+      if (document.querySelector('dialog[open]')) return
       if (event.key === 'Escape') {
         event.preventDefault()
         closeSummary()
@@ -323,14 +324,10 @@ export default function AstanaMap({ districtId, onDistrictChange, districts, ren
         {popupDistrictId === districtId && (ready && !mapError
           ? createPortal(<div key={districtId}>{renderSummary(closeSummary)}</div>, popupHost)
           : <div key={districtId} className="absolute inset-x-3 bottom-3 z-10 flex justify-center">{renderSummary(closeSummary)}</div>)}
-        <div ref={toolbar} className="pointer-events-none absolute inset-x-3 top-3 flex flex-col items-start gap-2">
-          <label className="pointer-events-auto flex max-w-full items-center gap-2 border border-slate-300 bg-white py-1 pl-3 pr-2">
-            <span className="text-[11px] font-medium text-slate-500">Район</span>
-            <select ref={districtSelect} id="map-district-select" aria-label="Район" value={districtId} onChange={(event) => chooseDistrict(event.target.value)}
-              className="min-h-8 min-w-0 max-w-full rounded-none bg-white pr-4 text-xs font-semibold text-slate-800 outline-offset-4">
-              {districts.map((district) => <option key={district.id} value={district.id}>{districtDisplayName(district.id, district.name)}</option>)}
-            </select>
-          </label>
+        <div ref={toolbar} className="pointer-events-none absolute inset-x-3 top-3 z-20 flex flex-col items-start gap-2">
+          <DistrictSelect buttonRef={districtSelect} id="map-district-select" label="Район" prefix="Район"
+            value={districtId} onChange={chooseDistrict} className="pointer-events-auto w-[260px] max-w-full"
+            options={districts.map((district) => ({ value: district.id, label: districtDisplayName(district.id, district.name) }))} />
           <div role="group" aria-label="Слои объектов" className="pointer-events-auto flex flex-wrap gap-1.5">
             {overlays.map((overlay) => {
               const active = selectedLayers.includes(overlay.id)

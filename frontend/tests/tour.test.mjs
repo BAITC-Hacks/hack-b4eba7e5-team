@@ -7,13 +7,9 @@ const source = await readFile(new URL('../src/lib/tour.ts', import.meta.url), 'u
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
 })
-const { getTourLayout } = await import(
+const { getTourSpotlight } = await import(
   `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
 )
-
-const cardSize = { height: 180 }
-const overlaps = (a, b) => a.x < b.x + b.width && a.x + a.width > b.x
-  && a.y < b.y + b.height && a.y + a.height > b.y
 
 function assertInside(rect, viewport) {
   assert.ok(Object.values(rect).every(Number.isFinite))
@@ -22,58 +18,56 @@ function assertInside(rect, viewport) {
   assert.ok(rect.y + rect.height <= viewport.height)
 }
 
-test('На широком экране карточка встаёт справа, а у правого края — слева', () => {
+test('Подсветка окружает видимый элемент с отступом 6px', () => {
+  assert.deepEqual(
+    getTourSpotlight({ x: 100, y: 200, width: 400, height: 250 }, { width: 1280, height: 800 }),
+    { x: 94, y: 194, width: 412, height: 262 },
+  )
+})
+
+test('При прокрутке подсветка точно следует элементу без промежуточной геометрии', () => {
   const viewport = { width: 1280, height: 800 }
-  for (const x of [100, 900]) {
-    const layout = getTourLayout({ x, y: 200, width: 200, height: 300 }, viewport, cardSize)
-    assertInside(layout.card, viewport)
-    assert.equal(overlaps(layout.spotlight, layout.card), false)
-    if (x === 100) assert.ok(layout.card.x >= layout.spotlight.x + layout.spotlight.width)
-    else assert.ok(layout.card.x + layout.card.width <= layout.spotlight.x)
+  const target = { x: 100, y: 400, width: 400, height: 100 }
+  const start = getTourSpotlight(target, viewport)
+  for (const offset of [1, 25, 120, 250]) {
+    const current = getTourSpotlight({ ...target, y: target.y - offset }, viewport)
+    assert.equal(current.y, start.y - offset)
+    assert.equal(current.x, start.x)
+    assert.equal(current.width, start.width)
+    assert.equal(current.height, start.height)
   }
+  assert.deepEqual(getTourSpotlight(target, viewport), start)
 })
 
-test('На телефоне 360px карточка помещается под выделением без перекрытия', () => {
-  const viewport = { width: 360, height: 780 }
-  const layout = getTourLayout({ x: 16, y: 80, width: 328, height: 300 }, viewport, cardSize)
-  assertInside(layout.spotlight, viewport)
-  assertInside(layout.card, viewport)
-  assert.equal(overlaps(layout.spotlight, layout.card), false)
-  assert.ok(layout.card.y > layout.spotlight.y)
-  assert.ok(layout.card.x >= 12 && layout.card.x + layout.card.width <= 348)
+test('На телефоне подсветка больших областей сохраняет края 8px', () => {
+  assert.deepEqual(
+    getTourSpotlight({ x: 0, y: 0, width: 800, height: 1200 }, { width: 360, height: 640 }),
+    { x: 8, y: 8, width: 344, height: 624 },
+  )
 })
 
-test('Для широкой области у низа экрана карточка располагается сверху', () => {
-  const viewport = { width: 1000, height: 720 }
-  const layout = getTourLayout({ x: 20, y: 400, width: 960, height: 280 }, viewport, cardSize)
-  assert.equal(overlaps(layout.spotlight, layout.card), false)
-  assert.ok(layout.card.y + layout.card.height <= layout.spotlight.y)
+test('Частично скрытая область обрезается только по невидимым краям', () => {
+  assert.deepEqual(
+    getTourSpotlight({ x: -80, y: -60, width: 300, height: 220 }, { width: 360, height: 640 }),
+    { x: 8, y: 8, width: 218, height: 158 },
+  )
+  assert.deepEqual(
+    getTourSpotlight({ x: 240, y: 500, width: 300, height: 220 }, { width: 360, height: 640 }),
+    { x: 234, y: 494, width: 118, height: 138 },
+  )
 })
 
-test('Частично и полностью скрытые области не выводят подсветку за экран', () => {
+test('Полностью скрытый элемент не превращается в выделенную область у края', () => {
   const viewport = { width: 360, height: 640 }
-  for (const target of [
-    { x: -80, y: -60, width: 300, height: 220 },
-    { x: 240, y: 500, width: 300, height: 220 },
-    { x: -500, y: -500, width: 40, height: 40 },
-    { x: 2000, y: 2000, width: 40, height: 40 },
-  ]) {
-    const layout = getTourLayout(target, viewport, cardSize)
-    assertInside(layout.spotlight, viewport)
-    assertInside(layout.card, viewport)
+  for (const point of [-500, 2000]) {
+    const spotlight = getTourSpotlight({ x: point, y: point, width: 40, height: 40 }, viewport)
+    assertInside(spotlight, viewport)
+    assert.equal(spotlight.width, 0)
+    assert.equal(spotlight.height, 0)
   }
 })
 
-test('В низком окне карточка ограничена доступной высотой и сохраняет отступы', () => {
-  const viewport = { width: 640, height: 160 }
-  const layout = getTourLayout({ x: 20, y: 10, width: 600, height: 140 }, viewport, cardSize)
-  assertInside(layout.spotlight, viewport)
-  assertInside(layout.card, viewport)
-  assert.ok(layout.card.y >= 12 && layout.card.y + layout.card.height <= 148)
-  assert.ok(layout.card.height < cardSize.height)
-})
-
-test('Геометрия конечна, воспроизводима и не меняет переданные объекты', () => {
+test('Геометрия конечна, воспроизводима и не меняет входные объекты', () => {
   for (const viewport of [{ width: 360, height: 640 }, { width: 4, height: 4 }, { width: 0, height: 0 }]) {
     for (const target of [
       { x: 0, y: 0, width: 0, height: 0 },
@@ -81,11 +75,12 @@ test('Геометрия конечна, воспроизводима и не м
       { x: NaN, y: Infinity, width: -10, height: NaN },
     ]) {
       const original = { ...target }
-      const layout = getTourLayout(target, viewport, cardSize)
-      assertInside(layout.card, viewport)
-      assertInside(layout.spotlight, viewport)
-      assert.deepEqual(layout, getTourLayout(target, viewport, cardSize))
+      const originalViewport = { ...viewport }
+      const spotlight = getTourSpotlight(target, viewport)
+      assertInside(spotlight, viewport)
+      assert.deepEqual(spotlight, getTourSpotlight(target, viewport))
       assert.deepEqual(target, original)
+      assert.deepEqual(viewport, originalViewport)
     }
   }
 })

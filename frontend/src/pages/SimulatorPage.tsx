@@ -4,6 +4,7 @@ import GuidedTour from '../components/GuidedTour'
 import { districtDisplayName } from '../lib/districts'
 import ScoreGauge from '../components/ScoreGauge'
 import DistrictPopup from '../components/DistrictPopup'
+import DistrictSelect from '../components/DistrictSelect'
 import MeasureDetails from '../components/MeasureDetails'
 import {
   ApiError, analyzeScenario, evaluateScenario, getSimConfig,
@@ -360,14 +361,14 @@ export default function SimulatorPage() {
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2 pl-7">
                       {measure.scope === 'district' ? (
-                        <select
-                          aria-label={`Район: ${measure.name}`} value={decision.district_id ?? ''}
-                          onChange={(event) => moveMeasure(measure, event.target.value)}
-                          aria-describedby={blockedDistricts.length ? `district-conflict-${measure.id}` : undefined}
-                          className={`min-h-9 min-w-0 max-w-full flex-1 rounded-none border border-stone-200 bg-white px-2 text-xs text-stone-600 ${focus} ${motion}`}
-                        >
-                          {dataset.districts.map((item) => <option key={item.id} value={item.id} disabled={Boolean(conflictReason(measure, item.id))}>{districtName(item.id)}{conflictReason(measure, item.id) ? ' — конфликт мер' : ''}</option>)}
-                        </select>
+                        <DistrictSelect label={`Район: ${measure.name}`} value={decision.district_id ?? ''}
+                          onChange={(value) => moveMeasure(measure, value)}
+                          describedBy={blockedDistricts.length ? `district-conflict-${measure.id}` : undefined}
+                          className="min-w-0 max-w-full flex-1"
+                          options={dataset.districts.map((item) => ({ value: item.id,
+                            label: `${districtName(item.id)}${conflictReason(measure, item.id) ? ' — конфликт мер' : ''}`,
+                            disabled: Boolean(conflictReason(measure, item.id)),
+                          }))} />
                       ) : <span className="py-2 text-[11px] text-stone-500">Весь город</span>}
                       <span className="shrink-0 text-[11px] tabular-nums text-stone-500">{measure.cost} ед.</span>
                     </div>
@@ -469,7 +470,10 @@ export default function SimulatorPage() {
           </div>}
         </section>
       </div>
-      {tourOpen && <GuidedTour onClose={() => setTourOpen(false)} />}
+      {tourOpen && <>
+        <div aria-hidden="true" className="h-[352px]" />
+        <GuidedTour onClose={() => setTourOpen(false)} />
+      </>}
     </main>
   )
 }
