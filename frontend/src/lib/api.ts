@@ -118,3 +118,8 @@ export const evaluateScenario = (decisions: Decision[]) =>
   api<Evaluation>('/api/sim/evaluate', { method: 'POST', json: { decisions } })
 export const analyzeScenario = (decisions: Decision[], onDelta: (text: string) => void, signal?: AbortSignal) =>
   streamSSE('/api/sim/analyze', { decisions }, onDelta, signal)
+
+// Локальные геослои загружаются только по запросу пользователя.
+export type MapLayerId = 'transport_stops' | 'green_spaces' | 'schools_kindergartens' | 'healthcare' | 'road_safety_objects'
+export const getMapLayer = (id: MapLayerId, signal?: AbortSignal) =>
+  api<import('geojson').FeatureCollection>(`/map/${id}.json`, { signal })
